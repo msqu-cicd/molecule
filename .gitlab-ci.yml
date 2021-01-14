@@ -1,17 +1,70 @@
 ---
-build:
-  image: "docker:stable-dind"
-  services:
-    - "docker:dind"
-  variables:
-    DOCKER_DRIVER: "overlay2"
-    DOCKER_TLS_CERTDIR: ""
-    DOCKERFILE: "Dockerfile"
-    CONTEXT: "."
-  stage: "build"
-  before_script:
-    - "docker login -u gitlab-ci-token -p ${CI_JOB_TOKEN} ${CI_REGISTRY}"
+image: docker:stable
+
+services:
+- name: docker:dind
+  command: ["--experimental"]
+
+variables:
+  CONTAINER_IMAGE: registry.gitlab.com/$CI_PROJECT_PATH
+  DOCKER_DRIVER: overlay2
+
+before_script:
+  # Enable experimental features in Docker client
+  - mkdir $HOME/.docker
+  - "echo -e '{\n  \"experimental\": \"enabled\"\n}' | tee $HOME/.docker/config.json"
+  # login to gitlab ci
+  - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN ${CI_REGISTRY}
+
+.build-template: &build-template
+  stage: build
   script:
-    - "docker pull ${CI_REGISTRY_IMAGE}:latest || true"
-    - "docker build --cache-from ${CI_REGISTRY_IMAGE}:latest --tag ${CI_REGISTRY_IMAGE}:latest -f ${DOCKERFILE} ${CONTEXT}"
-    - "docker push ${CI_REGISTRY_IMAGE}:latest"
+    - >
+      docker build \
+        --squash \
+        --tag $CONTAINER_IMAGE:$IMAGE_TAG \
+        -f ${DOCKERFILE:-./Dockerfile} \
+        .
+    - docker push $CONTAINER_IMAGE:$IMAGE_TAG
+
+# build-dind:
+#   <<: *build-template
+#   variables:
+#     IMAGE_TAG: "dind"
+#     DOCKERFILE: ./Dockerfile
+
+build-ansible-28:
+  <<: *build-template
+  variables:
+    IMAGE_TAG: "ansible-28"
+    DOCKERFILE: ./Ansible-28
+
+build-ansible-29:
+  <<: *build-template
+  variables:
+    IMAGE_TAG: "ansible-29"
+    DOCKERFILE: ./Ansible-29
+
+build-ansible-210:
+  <<: *build-template
+  variables:
+    IMAGE_TAG: "ansible-210"
+    DOCKERFILE: ./Ansible-210
+
+build-debian-10:
+  <<: *build-template
+  variables:
+    IMAGE_TAG: "debian-10"
+    DOCKERFILE: ./Debian-10
+
+build-debian-11:
+  <<: *build-template
+  variables:
+    IMAGE_TAG: "debian-11"
+    DOCKERFILE: ./Debian-11
+
+build-ubuntu-2004:
+  <<: *build-template
+  variables:
+    IMAGE_TAG: "ubuntu-2004"
+    DOCKERFILE: ./Ubuntu-2004
