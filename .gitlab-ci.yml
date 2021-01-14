@@ -1,0 +1,17 @@
+---
+build:
+  image: "docker:stable-dind"
+  services:
+    - "docker:dind"
+  variables:
+    DOCKER_DRIVER: "overlay2"
+    DOCKER_TLS_CERTDIR: ""
+    DOCKERFILE: "Dockerfile"
+    CONTEXT: "."
+  stage: "build"
+  before_script:
+    - "docker login -u gitlab-ci-token -p ${CI_JOB_TOKEN} ${CI_REGISTRY}"
+  script:
+    - "docker pull ${CI_REGISTRY_IMAGE}:latest || true"
+    - "docker build --cache-from ${CI_REGISTRY_IMAGE}:latest --tag ${CI_REGISTRY_IMAGE}:latest -f ${DOCKERFILE} ${CONTEXT}"
+    - "docker push ${CI_REGISTRY_IMAGE}:latest"
