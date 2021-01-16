@@ -27,12 +27,6 @@ before_script:
         .
     - docker push $CONTAINER_IMAGE:$IMAGE_TAG
 
-# build-dind:
-#   <<: *build-template
-#   variables:
-#     IMAGE_TAG: "dind"
-#     DOCKERFILE: ./Dockerfile
-
 build-ansible-28:
   <<: *build-template
   variables:
@@ -45,11 +39,11 @@ build-ansible-29:
     IMAGE_TAG: "ansible-29"
     DOCKERFILE: ./Ansible-29
 
-build-ansible-210:
+build-ansible:
   <<: *build-template
   variables:
-    IMAGE_TAG: "ansible-210"
-    DOCKERFILE: ./Ansible-210
+    IMAGE_TAG: "ansible"
+    DOCKERFILE: ./Ansible
 
 build-debian-10:
   <<: *build-template
