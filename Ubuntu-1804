@@ -8,6 +8,7 @@ RUN apt-get update \
     && apt-get upgrade -y \
     && apt-get install -y systemd \
                           systemd-sysv \
+                          ca-certificates \
                           python3-apt \
                           sudo \
     && apt-get clean \
