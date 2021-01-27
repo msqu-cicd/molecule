@@ -1,9 +1,4 @@
 ---
-include:
-  - project: 'pipeline-components/org/config'
-    ref: master
-    file: pipeline.yml
-
 image: docker:stable
 
 services:
