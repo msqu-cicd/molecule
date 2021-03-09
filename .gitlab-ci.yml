@@ -62,3 +62,9 @@ build-ubuntu-2004:
   variables:
     IMAGE_TAG: "ubuntu-2004"
     DOCKERFILE: ./Ubuntu-2004
+
+build-yamllint:
+  <<: *build-template
+  variables:
+    IMAGE_TAG: "yaml-lint"
+    DOCKERFILE: ./Yaml-Lint
