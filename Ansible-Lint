@@ -1,7 +1,9 @@
 FROM python:3-alpine
 
-# Install ansible-lint
-RUN pip3 install ansible-lint \
-    && pip3 cache purge
+RUN apk add --no-cache build-base libffi-dev libressl-dev && \
+    pip install pyyaml==3.13 ansible-lint && \
+    rm -rf ~/.cache/pip && \
+    apk del build-base
 
-ENTRYPOINT [ "ansible-lint" ]
+WORKDIR /work
+CMD ["ansible-lint", "--version"]
