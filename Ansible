@@ -5,4 +5,4 @@ RUN apk update && \
     python3 python3-dev py3-pip gcc git curl build-base bash \
     autoconf automake py3-cryptography linux-headers \
     musl-dev libffi-dev openssl-dev openssh \
-    && pip3 --no-cache-dir install ansible molecule[docker] molecule-hetznercloud netaddr
+    && pip3 --no-cache-dir install ansible molecule[docker] molecule-hetznercloud netaddr yamllint
