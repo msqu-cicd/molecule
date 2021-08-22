@@ -1,0 +1,21 @@
+FROM archlinux:latest
+
+ENV container docker
+ENV LC_ALL C
+
+RUN pacman -Sy \
+    && pacman -S --noconfirm \
+       ca-certificates libffi openssl procps-ng \
+       systemd 	systemd-sysvcompat wget \
+       python3-aur python3-minimal python3-netaddr python3-simplejson \
+    && pacman -Scc --noconfirm  \
+    && rm -rf /tmp/* /var/tmp/*
+
+COPY initctl_faker .
+RUN chmod +x initctl_faker && rm -fr /sbin/initctl && ln -s /initctl_faker /sbin/initctl
+
+# Make sure systemd doesn't start agettys on tty[1-6].
+RUN rm -f /lib/systemd/system/multi-user.target.wants/getty.target
+
+VOLUME ["/sys/fs/cgroup"]
+CMD ["/lib/systemd/systemd"]

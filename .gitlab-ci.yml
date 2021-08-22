@@ -33,6 +33,12 @@ build-ansible:
     IMAGE_TAG: "ansible"
     DOCKERFILE: ./Ansible
 
+build-archlinux:
+  <<: *build-template
+  variables:
+    IMAGE_TAG: "archlinux"
+    DOCKERFILE: ./Archlinux
+
 build-debian-10:
   <<: *build-template
   variables:
