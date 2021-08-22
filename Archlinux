@@ -1,4 +1,4 @@
-FROM archlinux:latest
+FROM archlinux:base-devel
 
 ENV container docker
 ENV LC_ALL C
