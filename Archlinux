@@ -6,7 +6,7 @@ ENV LC_ALL C
 RUN pacman -Sy \
     && pacman -S --noconfirm \
        ca-certificates libffi openssl procps-ng \
-       systemd systemd-sysvcompat wget \
+       sudo systemd systemd-sysvcompat wget \
        python-netaddr python-simplejson \
     && pacman -Scc --noconfirm  \
     && rm -rf /tmp/* /var/tmp/*
