@@ -6,5 +6,5 @@ RUN apk update && \
     autoconf automake py3-cryptography linux-headers \
     musl-dev libffi-dev openssl-dev openssh sudo \
     && pip3 --no-cache-dir install ansible molecule[docker] molecule-hetznercloud netaddr yamllint \
-    && git clone https://github.com/kewlfft/ansible-aur.git ~/.ansible/plugins/modules/aur \
-    && rm -rf !$/.git
+    && mkdir ~/.ansible/plugins/modules \
+    && curl -o ~/.ansible/plugins/modules/aur.py https://raw.githubusercontent.com/kewlfft/ansible-aur/master/plugins/modules/aur.py
