@@ -26,8 +26,8 @@ RUN apt-get update ; \
 
 # Install requirements.
 RUN apt-get update \
-    && apt-get install -y \
-    python3 \
+    && apt-get install --no-install-recommends -y \
+    python3-minimal \
     sudo \
     gnupg \
     python3-apt \
