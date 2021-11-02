@@ -30,6 +30,7 @@ RUN apt-get update \
     python3-minimal \
     sudo \
     gnupg \
+    ca-certificates \
     python3-apt \
     python3-simplejson \
     && apt-get clean \
