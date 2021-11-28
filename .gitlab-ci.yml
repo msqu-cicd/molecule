@@ -39,12 +39,6 @@ build-archlinux:
     IMAGE_TAG: "archlinux"
     DOCKERFILE: ./Archlinux
 
-build-debian-9:
-  <<: *build-template
-  variables:
-    IMAGE_TAG: "debian-9"
-    DOCKERFILE: ./Debian-9
-
 build-debian-10:
   <<: *build-template
   variables:
