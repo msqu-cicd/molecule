@@ -22,6 +22,7 @@ RUN apt-get update \
     sudo \
     gnupg \
     ca-certificates \
+    iproute2 \
     python3-apt \
     python3-simplejson \
     && apt-get clean \
