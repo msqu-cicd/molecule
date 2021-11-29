@@ -1,4 +1,4 @@
-FROM docker:rc-dind
+FROM docker:dind
 
 RUN apk update && \
     apk add --no-cache \
@@ -8,3 +8,5 @@ RUN apk update && \
     && pip3 --no-cache-dir install ansible jmespath molecule[docker] molecule-hetznercloud netaddr yamllint \
     && mkdir -p ~/.ansible/plugins/modules \
     && curl -o ~/.ansible/plugins/modules/aur.py https://raw.githubusercontent.com/kewlfft/ansible-aur/master/plugins/modules/aur.py
+
+COPY .ansible.cfg /root/.ansible.cfg
