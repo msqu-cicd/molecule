@@ -1,21 +1,26 @@
-FROM archlinux:base-devel
+FROM archlinux:latest
 
-ENV container docker
 ENV LC_ALL C
 
-RUN pacman -Sy \
-    && pacman -S --noconfirm \
-       ca-certificates libffi openssl procps-ng \
-       sudo systemd systemd-sysvcompat wget \
-       python-netaddr python-simplejson \
-    && pacman -Scc --noconfirm  \
-    && rm -rf /tmp/* /var/tmp/*
+# Enable systemd.
+RUN pacman -Sy ; \
+    pacman -S --noconfirm \
+    ca-certificates libffi openssl procps-ng \
+    sudo systemd systemd-sysvcompat wget \
+    python-netaddr python-simplejson ; \
+    pacman -Scc --noconfirm ; \
+    rm -rf /tmp/* /var/tmp/* ; \
+    rm -rf /lib/systemd/system/multi-user.target.wants/* ; \
+    rm -rf /etc/systemd/system/*.wants/* ; \
+    rm -rf /lib/systemd/system/local-fs.target.wants/* ; \
+    rm -rf /lib/systemd/system/sockets.target.wants/*udev* ; \
+    rm -rf /lib/systemd/system/sockets.target.wants/*initctl* ; \
+    rm -rf /lib/systemd/system/sysinit.target.wants/systemd-tmpfiles-setup* ; \
+    rm -rf /lib/systemd/system/systemd-update-utmp*
 
+COPY modprobe.sh /usr/local/bin/modprobe
 COPY initctl_faker .
 RUN chmod +x initctl_faker && rm -fr /sbin/initctl && ln -s /initctl_faker /sbin/initctl
 
-# Make sure systemd doesn't start agettys on tty[1-6].
-RUN rm -f /lib/systemd/system/multi-user.target.wants/getty.target
-
-VOLUME ["/sys/fs/cgroup"]
+VOLUME [ "/sys/fs/cgroup" ]
 CMD ["/lib/systemd/systemd"]
