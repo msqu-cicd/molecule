@@ -1,0 +1,37 @@
+---
+stages:
+  - linting
+  - testing
+
+ansible-lint:
+  image:
+    name: yokogawa/ansible-lint
+    entrypoint: ["/bin/sh", "-c"]
+  stage: linting
+  script:
+    - 'ansible-lint ${CI_PROJECT_DIR}'
+
+yamllint:
+  image:
+    name: registry.gitlab.com/ms-it/molecule:yamllint
+    entrypoint: ["/bin/sh", "-c"]
+  stage: linting
+  script:
+    - 'yamllint ${CI_PROJECT_DIR}'
+
+molecule:
+  image:
+    name: registry.gitlab.com/ms-it/molecule:ansible
+  stage: testing
+  services:
+    - docker:dind
+  variables:
+    PY_COLORS: 1
+    ANSIBLE_FORCE_COLOR: 1
+  script:
+    - export CI_PROJECT_NAME_MOLECULE=$(echo $CI_PROJECT_NAME | tr '_' '-')
+    - cd ${CI_PROJECT_DIR} && molecule test
+  only:
+    variables:
+      # - $HCLOUD_TOKEN
+      - $CI_SERVER_URL == "https://gitlab.msqu.de"

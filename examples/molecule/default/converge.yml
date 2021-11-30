@@ -1,0 +1,24 @@
+---
+- name: Converge
+  hosts: all
+  become: true
+
+  pre_tasks:
+    - name: update APT Cache
+      ansible.builtin.apt:
+        update_cache: yes
+        cache_valid_time: 600
+      register: result
+      until: result is succeeded
+      when: ansible_os_family == 'Debian'
+
+    - name: Deploy SSH-Keys to remote host
+      ansible.posix.authorized_key:
+        user: root
+        state: present
+        key: https://github.com/eifelmicha.keys
+
+  tasks:
+    - name: "{{ lookup('env', 'MOLECULE_PROJECT_DIRECTORY') | basename }}"
+      include_role:
+        name: "{{ lookup('env', 'MOLECULE_PROJECT_DIRECTORY') | basename }}"
