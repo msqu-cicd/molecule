@@ -18,13 +18,16 @@ RUN apt-get update ; \
 # Install requirements.
 RUN apt-get update \
     && apt-get install --no-install-recommends -y \
-    python3-minimal \
-    sudo \
+    apt-transport-https \
+    bash \
     gnupg \
     ca-certificates \
     iproute2 \
+    lsb-release \
+    python3-minimal \
     python3-apt \
     python3-simplejson \
+    sudo \
     && apt-get clean \
     && rm -Rf /usr/share/doc \
     && rm -Rf /usr/share/man

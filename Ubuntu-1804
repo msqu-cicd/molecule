@@ -25,10 +25,12 @@ RUN apt-get update ; \
 # Install requirements.
 RUN apt-get update \
     && apt-get install --no-install-recommends -y \
+    apt-transport-https \
     bash \
     gnupg \
     ca-certificates \
     iproute2 \
+    lsb-release \
     python3-minimal \
     python3-apt \
     python3-simplejson \
