@@ -27,6 +27,12 @@ before_script:
         .
     - docker push $CONTAINER_IMAGE:$IMAGE_TAG
 
+build-alpine:
+  <<: *build-template
+  variables:
+    IMAGE_TAG: "alpine"
+    DOCKERFILE: ./Alpine
+
 build-ansible:
   <<: *build-template
   variables:
