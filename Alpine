@@ -3,7 +3,7 @@ FROM docker:dind
 RUN apk add --no-cache --virtual .build-deps \
     python3-dev py3-setuptools py3-wheel gcc build-base musl-dev libffi-dev openssl-dev autoconf automake linux-headers && \
     apk add --no-cache \
-    python3 py3-botocore py3-boto3 py3-cryptography py3-pip bash curl git make openssh-client-common sshpass sudo && \
+    python3 py3-botocore py3-boto3 py3-cryptography py3-pip bash curl git make openssh-client-common rsync sshpass sudo && \
     pip3 --no-cache-dir install ansible jmespath molecule[docker] git+https://github.com/ansible-community/molecule-digitalocean.git git+https://github.com/ansible-community/molecule-ec2.git molecule-hetznercloud netaddr && \
     apk del .build-deps && \
     mkdir -p ~/.ansible/plugins/modules && \
