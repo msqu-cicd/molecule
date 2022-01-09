@@ -8,5 +8,3 @@ RUN apk add --no-cache --virtual .build-deps \
     apk del .build-deps && \
     mkdir -p ~/.ansible/plugins/modules && \
     curl -o ~/.ansible/plugins/modules/aur.py https://raw.githubusercontent.com/kewlfft/ansible-aur/master/plugins/modules/aur.py
-
-COPY .ansible.cfg /root/.ansible.cfg
