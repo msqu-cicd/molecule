@@ -3,7 +3,7 @@ FROM archlinux:latest
 ENV LC_ALL C
 
 # Enable systemd.
-RUN pacman -Sy --noconfirm \
+RUN pacman -S --noconfirm \
     ca-certificates libffi openssl procps-ng \
     sudo systemd systemd-sysvcompat wget \
     python-netaddr python-simplejson ; \
