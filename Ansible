@@ -4,7 +4,7 @@ RUN apk add --no-cache --virtual .build-deps \
     python3-dev py3-setuptools py3-wheel gcc build-base musl-dev libffi-dev openssl-dev autoconf automake linux-headers && \
     apk add --no-cache \
     python3 py3-botocore py3-boto3 py3-cryptography py3-pip py3-ruamel.yaml bash curl git make openssh-client-common rsync sshpass sudo yq && \
-    pip3 --no-cache-dir install ansible jmespath molecule[docker] git+https://github.com/ansible-community/molecule-digitalocean.git git+https://github.com/ansible-community/molecule-ec2.git molecule-hetznercloud netaddr dnspython && \
+    pip3 --no-cache-dir install ansible jmespath molecule[docker] git+https://github.com/ansible-community/molecule-digitalocean.git git+https://github.com/ansible-community/molecule-ec2.git molecule-hetznercloud netaddr dnspython kubernetes-validate && \
     apk del .build-deps && \
     mkdir -p ~/.ansible/plugins/modules && \
     curl -o ~/.ansible/plugins/modules/aur.py https://raw.githubusercontent.com/kewlfft/ansible-aur/master/plugins/modules/aur.py
