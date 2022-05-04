@@ -8,13 +8,13 @@ RUN pacman --noconfirm --overwrite "*" -Syu; \
     ca-certificates libffi openssl procps-ng \
     sudo systemd systemd-sysvcompat wget \
     python-netaddr python-simplejson ; \
-    pacman -Scc --noconfirm ; \
     pacman -Sy --noconfirm archlinux-keyring ; \
     pacman-key --populate ; \
     pacman-key --refresh-keys ; \
     pacman -Syyu --noconfirm ; \
     pacman-db-upgrade ; \
     update-ca-trust ; \
+    pacman -Scc --noconfirm ; \
     rm -rf /tmp/* /var/tmp/* ; \
     rm -rf /lib/systemd/system/multi-user.target.wants/* ; \
     rm -rf /etc/systemd/system/*.wants/* ; \
