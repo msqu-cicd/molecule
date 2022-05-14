@@ -27,6 +27,10 @@ RUN pacman --noconfirm --overwrite "*" -Syu; \
 COPY modprobe.sh /usr/local/bin/modprobe
 COPY initctl_faker .
 RUN chmod +x initctl_faker && rm -fr /sbin/initctl && ln -s /initctl_faker /sbin/initctl
+RUN echo -e " \n\
+[multilib] \n\
+Include = /etc/pacman.d/mirrorlist \n\
+" >> /etc/pacman.conf
 
 VOLUME [ "/sys/fs/cgroup" ]
 CMD ["/lib/systemd/systemd"]
