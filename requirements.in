@@ -1,0 +1,11 @@
+# requirements.in
+# https://github.com/ansible/ansible/issues/77969
+ansible<6.0.0
+ansible-lint
+dnspython
+jmespath
+kubernetes-validate
+molecule<4.0.0
+molecule-docker<2.0.0
+molecule-hetznercloud
+netaddr
