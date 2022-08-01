@@ -58,7 +58,7 @@ build-debian-12:
   <<: *build-template
   variables:
     IMAGE_TAG: "debian-12"
-    DOCKERFILE: ./Debian-12
+    DOCKERFILE: ./Debian
     VERSION: "12"
 
 build-ubuntu-2004:
