@@ -52,14 +52,14 @@ build-debian-11:
   variables:
     IMAGE_TAG: "debian-11"
     DOCKERFILE: ./Debian
-    VERSION: "11"
+    VERSION: "bullseye"
 
 build-debian-12:
   <<: *build-template
   variables:
     IMAGE_TAG: "debian-12"
     DOCKERFILE: ./Debian
-    VERSION: "12"
+    VERSION: "bookworm"
 
 build-ubuntu-2004:
   <<: *build-template

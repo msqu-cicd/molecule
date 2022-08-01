@@ -1,4 +1,4 @@
-ARG VERSION=11
+ARG VERSION=stable
 
 FROM debian:${VERSION}
 
