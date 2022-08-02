@@ -14,6 +14,7 @@ RUN apt-get update \
        iproute2 \
        locales \
        lsb-release \
+       procps \
        python3-minimal \
        python3-apt \
        python3-simplejson \
@@ -22,7 +23,16 @@ RUN apt-get update \
        systemd-sysv \
     && apt-get clean \
     && rm -Rf /var/lib/apt/lists/* \
-    && rm -Rf /usr/share/doc && rm -Rf /usr/share/man
+    && rm -Rf /usr/share/doc && rm -Rf /usr/share/man \
+    && rm -rf /tmp/* /var/tmp/* ; \
+       rm -rf /lib/systemd/system/multi-user.target.wants/* ; \
+       rm -rf /etc/systemd/system/*.wants/* ; \
+       rm -rf /lib/systemd/system/local-fs.target.wants/* ; \
+       rm -rf /lib/systemd/system/sockets.target.wants/*udev* ; \
+       rm -rf /lib/systemd/system/sockets.target.wants/*initctl* ; \
+       rm -rf /lib/systemd/system/sysinit.target.wants/systemd-tmpfiles-setup* ; \
+       rm -rf /lib/systemd/system/systemd-update-utmp* ; \
+       rm -rf /lib/systemd/system/getty.target
 
 # Fix potential UTF-8 errors with ansible-test.
 RUN locale-gen en_US.UTF-8
@@ -30,10 +40,5 @@ RUN locale-gen en_US.UTF-8
 COPY modprobe.sh /usr/local/bin/modprobe
 COPY systemctl3.py /usr/bin/systemctl
 RUN chmod +x /usr/bin/systemctl
-
-# Remove unnecessary getty and udev targets that result in high CPU usage when using
-# multiple containers with Molecule (https://github.com/ansible/molecule/issues/1104)
-RUN rm -f /lib/systemd/system/systemd*udev* \
-  && rm -f /lib/systemd/system/getty.target
 
 CMD ["/usr/bin/systemctl"]
