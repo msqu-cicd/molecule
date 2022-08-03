@@ -34,6 +34,12 @@ build-ansible:
     IMAGE_TAG: "ansible"
     DOCKERFILE: ./Ansible
 
+build-ansible-dind:
+  <<: *build-template
+  variables:
+    IMAGE_TAG: "ansible-dind"
+    DOCKERFILE: ./AnsibleDinD
+
 build-ansible-lint:
   <<: *build-template
   variables:
