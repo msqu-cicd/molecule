@@ -33,12 +33,14 @@ build-ansible:
   variables:
     IMAGE_TAG: "ansible"
     DOCKERFILE: ./Ansible
+    VERSION: "python:3-alpine"
 
 build-ansible-dind:
   <<: *build-template
   variables:
     IMAGE_TAG: "ansible-dind"
-    DOCKERFILE: ./AnsibleDinD
+    DOCKERFILE: ./Ansible
+    VERSION: "docker:dind"
 
 build-ansible-lint:
   <<: *build-template
