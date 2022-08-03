@@ -8,8 +8,7 @@ cryptography
 dnspython
 jmespath
 kubernetes-validate
-molecule<4.0.0
-molecule-docker<2.0.0
-molecule-hetznercloud
+molecule
+molecule-docker
 netaddr
 ruamel.yaml
