@@ -42,12 +42,6 @@ build-ansible-dind:
     DOCKERFILE: ./Ansible
     VERSION: "docker:dind"
 
-build-ansible-lint:
-  <<: *build-template
-  variables:
-    IMAGE_TAG: "ansible-lint"
-    DOCKERFILE: ./AnsibleLint
-
 build-archlinux:
   <<: *build-template
   variables:
@@ -94,9 +88,3 @@ build-ubuntu-2204:
     IMAGE_TAG: "ubuntu-22.04"
     DOCKERFILE: ./Ubuntu
     VERSION: "22.04"
-
-build-yamllint:
-  <<: *build-template
-  variables:
-    IMAGE_TAG: "yamllint"
-    DOCKERFILE: ./Yamllint

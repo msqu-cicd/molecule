@@ -1,5 +1,0 @@
-FROM alpine:edge
-
-RUN apk --no-cache add ansible-lint
-
-ENTRYPOINT [ "ansible-lint" ]
