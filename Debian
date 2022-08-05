@@ -37,8 +37,5 @@ RUN apt-get update \
 # Fix potential UTF-8 errors with ansible-test.
 RUN locale-gen en_US.UTF-8
 
-COPY modprobe.sh /usr/local/bin/modprobe
-COPY systemctl3.py /usr/bin/systemctl
-RUN chmod +x /usr/bin/systemctl
-
-CMD ["/usr/bin/systemctl"]
+VOLUME ["/sys/fs/cgroup", "/tmp", "/run"]
+CMD ["/lib/systemd/systemd"]

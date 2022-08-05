@@ -24,12 +24,10 @@ RUN pacman --noconfirm --overwrite "*" -Syu; \
     rm -rf /lib/systemd/system/sysinit.target.wants/systemd-tmpfiles-setup* ; \
     rm -rf /lib/systemd/system/systemd-update-utmp*
 
-COPY modprobe.sh /usr/local/bin/modprobe
-COPY systemctl3.py /usr/bin/systemctl
-RUN chmod +x /usr/bin/systemctl
 RUN echo -e " \n\
 [multilib] \n\
 Include = /etc/pacman.d/mirrorlist \n\
 " >> /etc/pacman.conf
 
-CMD ["/usr/bin/systemctl"]
+VOLUME ["/sys/fs/cgroup", "/tmp", "/run"]
+CMD ["/lib/systemd/systemd"]
