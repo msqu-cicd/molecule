@@ -75,6 +75,12 @@ build-debian-12:
     DOCKERFILE: ./Debian
     VERSION: "bookworm"
 
+build-lint:
+  <<: *build-template
+  variables:
+    IMAGE_TAG: "lint"
+    DOCKERFILE: ./Lint
+
 build-ubuntu-2004:
   <<: *build-template
   variables:
