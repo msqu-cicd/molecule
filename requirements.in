@@ -12,6 +12,7 @@ jmespath
 kubernetes-validate
 molecule
 molecule-docker
+molecule-podman
 netaddr
 ruamel.yaml
 pyaml
