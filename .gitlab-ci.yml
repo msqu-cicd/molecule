@@ -51,21 +51,21 @@ build-archlinux:
 build-debian-10:
   <<: *build-template
   variables:
-    IMAGE_TAG: "debian10"
+    IMAGE_TAG: "debian-10"
     DOCKERFILE: ./Debian
     VERSION: "10"
 
 build-debian-11:
   <<: *build-template
   variables:
-    IMAGE_TAG: "debian11"
+    IMAGE_TAG: "debian-11"
     DOCKERFILE: ./Debian
     VERSION: "bullseye"
 
 build-debian-12:
   <<: *build-template
   variables:
-    IMAGE_TAG: "debian12"
+    IMAGE_TAG: "debian-12"
     DOCKERFILE: ./Debian
     VERSION: "bookworm"
 
@@ -78,13 +78,13 @@ build-lint:
 build-ubuntu-2004:
   <<: *build-template
   variables:
-    IMAGE_TAG: "ubuntu2004"
+    IMAGE_TAG: "ubuntu-20.04"
     DOCKERFILE: ./Ubuntu
     VERSION: "20.04"
 
 build-ubuntu-2204:
   <<: *build-template
   variables:
-    IMAGE_TAG: "ubuntu2204"
+    IMAGE_TAG: "ubuntu-22.04"
     DOCKERFILE: ./Ubuntu
     VERSION: "22.04"
