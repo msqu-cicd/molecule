@@ -1,37 +1,199 @@
 ---
 stages:
-  - linting
-  - testing
+  - Lint
+  - Unit
+  - Integration
 
 ansible-lint:
   image:
-    name: yokogawa/ansible-lint
+    name: registry.gitlab.com/ms-it/molecule:lint
     entrypoint: ["/bin/sh", "-c"]
-  stage: linting
+  stage: Lint
+  before_script:
+    - ansible-lint --version
   script:
-    - 'ansible-lint ${CI_PROJECT_DIR}'
+    - 'ansible-lint -p --offline ${CI_PROJECT_DIR}'
+
+shellcheck:
+  image:
+    name: registry.gitlab.com/ms-it/molecule:lint
+    entrypoint: ["/bin/sh", "-c"]
+  stage: Lint
+  before_script:
+    - shellcheck --version
+  script:
+    # anything ending on .*sh, should be shell script
+    - |
+      find . -name .git -type d -prune -o -type f -name \*.\*sh -print0 |
+      xargs -0 -P $(nproc) -r -n1 shellcheck --format=gcc -x
+    # magic, any file with a valid shebang should be scanned aswell
+    - |
+      find . -name .git -type d -prune -o -type f -regex '.*/[^.]*$' -print0 |
+      xargs -0 -P $(nproc) -r -n1 sh -c 'FILE="$0"; if head -n1 "$FILE" |grep -q "^#\\! \?/.\+\(ba|d|k\)\?sh" ; then shellcheck "$FILE" --format=gcc -x ; else /bin/true ; fi '
 
 yamllint:
   image:
-    name: registry.gitlab.com/ms-it/molecule:yamllint
+    name: registry.gitlab.com/ms-it/molecule:lint
     entrypoint: ["/bin/sh", "-c"]
-  stage: linting
+  stage: Lint
+  before_script:
+    - yamllint --version
   script:
-    - 'yamllint ${CI_PROJECT_DIR}'
+    - 'yamllint -f parsable ${CI_PROJECT_DIR}'
 
-molecule:
+.molecule-template: &molecule-template
   image:
     name: registry.gitlab.com/ms-it/molecule:ansible
   stage: testing
-  services:
-    - docker:dind
+  script:
+    - EXITCODE=0
+    - echo $ANSIBLE_VAULT_PASSWORD > ${CI_PROJECT_DIR}/.vault
+    - export CI_HOSTNAME=$(echo $MOLECULE_DISTRO | tr -dc '[:alnum:]\n\r' | tr '[:upper:]' '[:lower:]')
+    - export CI_PROJECT_NAME_MOLECULE=$(echo $CI_PROJECT_NAME | tr '_' '-')
+    - export ANSIBLE_ROOT_REPO=$(echo $CI_PROJECT_NAMESPACE | sed 's|\(.*\)/.*|\1|')
+    - export RANDOM_SUBNET_IP=$(shuf -i 2-254 -n 1)
+    - export RANDOM_SUBNET_NAME=$(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 16 | head -n 1)
+    # get molecule scenarios
+    - mkdir -p ${CI_PROJECT_DIR}/molecule/default
+    - cd ${HOME}
+    - git clone --depth 1 https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/${ANSIBLE_ROOT_REPO}/molecule.git
+    - rsync -avzh --ignore-existing --ignore-errors molecule/${MOLECULE_SCENARIO_NAME}/ ${CI_PROJECT_DIR}/molecule/default/
+    # get real world variables for integration testing, else modify inventory
+    - if [[ "$TEST_TYPE" == "unit" ]]; then yq -i 'del(.provisioner.inventory)' ${CI_PROJECT_DIR}/molecule/default/molecule.yml; fi
+    - if [[ "$TEST_TYPE" == "integration" ]]; then git clone --depth 1 --filter=blob:none --no-checkout https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/${ANSIBLE_ROOT_REPO}/infra.git; fi
+    - if [[ "$TEST_TYPE" == "integration" ]]; then cd infra && git checkout main -- group_vars && rsync -aP --remove-source-files group_vars ${CI_PROJECT_DIR}; fi
+    # fix requirements.yml URLs + Tokens
+    - cd ${CI_PROJECT_DIR}
+    - test -f requirements.yml && sed -i "s,ssh://git@gitea.msqu.de:22222,https://gitea_admin:$GITEA_TOKEN@gitea.msqu.de,g" requirements.yml
+    - test -f requirements.yml && sed -i "s,git@github.com:,https://github.com/,g" requirements.yml
+    - test -f requirements.yml && sed -i "s,ssh://git@gitlab.msqu.de:2222,https://root:$GITLAB_TOKEN_VALUE@gitlab.msqu.de,g" requirements.yml
+    - cd ${CI_PROJECT_DIR} && molecule test  || EXITCODE=$?
+    - test $EXITCODE -eq 0 && echo "All Fine!" || echo "Something bad happened";
+    - exit $EXITCODE
+  rules:
+    - &rule_a
+      changes:
+        - ".ansible-lint"
+        - ".gitlab-ci.yml"
+        - ".yamllint"
+        - "Makefile"
+      when: never
+    - &rule_b
+      if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      when: manual
+      allow_failure: true
+    - &rule_z
+      if: '$HCLOUD_TOKEN != null && $CI_SERVER_URL == "https://gitlab.msqu.de"'
+      when: always
+
+unit_debian-10:
+  <<: *molecule-template
+  stage: Unit
   variables:
     PY_COLORS: 1
     ANSIBLE_FORCE_COLOR: 1
-  script:
-    - export CI_PROJECT_NAME_MOLECULE=$(echo $CI_PROJECT_NAME | tr '_' '-')
-    - cd ${CI_PROJECT_DIR} && molecule test
-  only:
-    variables:
-      # - $HCLOUD_TOKEN
-      - $CI_SERVER_URL == "https://gitlab.msqu.de"
+    MOLECULE_DISTRO: "debian-10"
+    MOLECULE_SCENARIO_NAME: hetznercloud
+    TEST_TYPE: unit
+  rules:
+    - *rule_a
+    - *rule_b
+    - *rule_z
+
+integration_debian-10:
+  <<: *molecule-template
+  stage: Integration
+  needs: [unit_debian-10]
+  variables:
+    PY_COLORS: 1
+    ANSIBLE_FORCE_COLOR: 1
+    MOLECULE_DISTRO: "debian-10"
+    MOLECULE_SCENARIO_NAME: hetznercloud
+    TEST_TYPE: integration
+  rules:
+    - *rule_a
+    - *rule_b
+    - *rule_z
+
+unit_debian-11:
+  <<: *molecule-template
+  stage: Unit
+  variables:
+    PY_COLORS: 1
+    ANSIBLE_FORCE_COLOR: 1
+    MOLECULE_DISTRO: "debian-11"
+    MOLECULE_SCENARIO_NAME: hetznercloud
+    TEST_TYPE: unit
+  rules:
+    - *rule_a
+    - *rule_z
+
+integration_debian-11:
+  <<: *molecule-template
+  stage: Integration
+  needs: [unit_debian-11]
+  variables:
+    PY_COLORS: 1
+    ANSIBLE_FORCE_COLOR: 1
+    MOLECULE_DISTRO: "debian-11"
+    MOLECULE_SCENARIO_NAME: hetznercloud
+    TEST_TYPE: integration
+  rules:
+    - *rule_a
+    - *rule_z
+
+unit_ubuntu-2004:
+  <<: *molecule-template
+  stage: Unit
+  variables:
+    PY_COLORS: 1
+    ANSIBLE_FORCE_COLOR: 1
+    MOLECULE_DISTRO: "ubuntu-20.04"
+    MOLECULE_SCENARIO_NAME: hetznercloud
+    TEST_TYPE: unit
+  rules:
+    - *rule_a
+    - *rule_b
+    - *rule_z
+
+integration_ubuntu-2004:
+  <<: *molecule-template
+  stage: Integration
+  needs: [unit_ubuntu-2004]
+  variables:
+    PY_COLORS: 1
+    ANSIBLE_FORCE_COLOR: 1
+    MOLECULE_DISTRO: "ubuntu-20.04"
+    MOLECULE_SCENARIO_NAME: hetznercloud
+    TEST_TYPE: integration
+  rules:
+    - *rule_a
+    - *rule_b
+    - *rule_z
+
+unit_ubuntu-2204:
+  <<: *molecule-template
+  stage: Unit
+  variables:
+    PY_COLORS: 1
+    ANSIBLE_FORCE_COLOR: 1
+    MOLECULE_DISTRO: "ubuntu-22.04"
+    MOLECULE_SCENARIO_NAME: hetznercloud
+    TEST_TYPE: unit
+  rules:
+    - *rule_a
+    - *rule_z
+
+integration_ubuntu-2204:
+  <<: *molecule-template
+  stage: Integration
+  needs: [unit_ubuntu-2204]
+  variables:
+    PY_COLORS: 1
+    ANSIBLE_FORCE_COLOR: 1
+    MOLECULE_DISTRO: "ubuntu-22.04"
+    MOLECULE_SCENARIO_NAME: hetznercloud
+    TEST_TYPE: integration
+  rules:
+    - *rule_a
+    - *rule_z
