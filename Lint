@@ -1,5 +1,5 @@
 FROM alpine:edge
 
-RUN apk --no-cache add ansible-lint bash shellcheck yamllint
+RUN apk --no-cache add ansible-lint bash py3-filelock shellcheck yamllint
 
 CMD ["/bin/bash"]
