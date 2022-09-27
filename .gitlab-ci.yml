@@ -7,20 +7,35 @@ variables:
   CI_REGISTRY: registry.msqu.de
   CONTAINER_IMAGE: $CI_REGISTRY/$CI_PROJECT_NAME
 
-before_script:
-  - mkdir -p /kaniko/.docker
-  - echo "{\"auths\":{\"${CI_REGISTRY}\":{\"auth\":\"$(echo -n ${CI_REGISTRY_USER}:${CI_REGISTRY_PASSWORD} | base64)\"}}}" > /kaniko/.docker/config.json
-
 .build-template: &build-template
   stage: build
   script:
+    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"},\"$DOCKER_REGISTRY\":{\"auth\":\"$(echo -n ${DOCKER_USERNAME}:${DOCKER_PASSWORD} | base64 | tr -d '\n')\"}}}" > /kaniko/.docker/config.json
+
+    # default tag based on commit
+    - IMAGE_DESTS="--destination $CONTAINER_IMAGE:${IMAGE_TAG}"
+    - IMAGE_DESTS="$IMAGE_DESTS --destination $DOCKER_USERNAME/${CI_PROJECT_NAME}:${IMAGE_TAG}"
+
+    # add tag for reference if available
+    - |
+      if [[ ! -z $CI_COMMIT_REF_NAME ]]; then
+        # replace / with - in reference names
+        REF_TAG_NORMALIZED=$(echo $CI_COMMIT_REF_NAME | sed s:/:-:g)
+        IMAGE_DESTS="$IMAGE_DESTS --destination $DOCKER_USERNAME/${CI_PROJECT_NAME}:${IMAGE_TAG}-$REF_TAG_NORMALIZED"
+        IMAGE_DESTS="$IMAGE_DESTS --destination $CONTAINER_IMAGE:${IMAGE_TAG}-$REF_TAG_NORMALIZED"
+      fi
+
     - >
       /kaniko/executor \
         --context "${CI_PROJECT_DIR}" \
+        --log-timestamp=true \
+        --push-retry=2 \
         --single-snapshot \
+        --use-new-run \
         --build-arg VERSION=${VERSION:-"latest"} \
         --destination "${CONTAINER_IMAGE}:${IMAGE_TAG}" \
-        --dockerfile ${DOCKERFILE:-./Dockerfile}
+        --dockerfile ${DOCKERFILE:-./Dockerfile} \
+        $IMAGE_DESTS
 
 build-ansible:
   <<: *build-template
