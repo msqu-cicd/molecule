@@ -7,8 +7,21 @@ variables:
   CI_REGISTRY: registry.msqu.de
   CONTAINER_IMAGE: $CI_REGISTRY/$CI_PROJECT_NAME
 
+# global rules
+.rules-default:
+  - if: '$CI_PIPELINE_SOURCE == "web"'
+    when: always
+  - changes:
+      - ".ansible-lint"
+      - ".gitlab-ci.yml"
+      - ".yamllint"
+      - "Makefile"
+    when: never
+  - if: '$CI_SERVER_URL == "https://gitlab.msqu.de"'
+
 .build-template: &build-template
   stage: build
+  rules: !reference [.rules-default]
   script:
     - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"},\"$DOCKER_REGISTRY\":{\"auth\":\"$(echo -n ${DOCKER_USERNAME}:${DOCKER_PASSWORD} | base64 | tr -d '\n')\"}}}" > /kaniko/.docker/config.json
 
