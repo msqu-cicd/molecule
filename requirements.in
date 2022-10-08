@@ -1,6 +1,5 @@
 # requirements.in
-# https://github.com/ansible/ansible/issues/77969
-ansible<6.0.0
+ansible
 ansible-compat
 ansible-lint
 boto3
