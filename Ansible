@@ -4,7 +4,8 @@ FROM ${FROM}
 
 COPY requirements.in /requirements.in
 
-RUN apk add --no-cache --virtual .build-deps \
+RUN apk update && \
+    apk add --no-cache --virtual .build-deps \
     python3-dev py3-setuptools py3-wheel gcc build-base musl-dev libffi-dev openssl-dev autoconf automake linux-headers && \
     apk add --no-cache python3 py3-pip bash bind-tools curl git make openssh-client podman rsync sshpass sudo yq && \
     pip3 install --no-cache-dir --no-compile pip-tools && pip-compile /requirements.in && \
