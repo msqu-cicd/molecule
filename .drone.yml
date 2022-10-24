@@ -1,28 +1,70 @@
-_include: https://gitea.msqu.de/devops/build_scripts/raw/branch/main/drone/ContainerImageKaniko.yml
-
+---
 kind: pipeline
 name: default
+
+.ContainerImageKaniko: &ContainerImageKaniko
+  name: ContainerImageKaniko
+  image: gcr.io/kaniko-project/executor:debug
+
+  environment:
+    KANIKO_ARGS: ""
+    DOCKERFILE: ""
+    ADD_CI_REGISTRY_AUTH: "true"
+
+  commands:
+    - &ContainerImageKanikoCommands |
+
+      # drone does not support expanding vars in environment values, set defaults via bash
+      if [[ -z "$CONTEXT_DIR" ]]; then CONTEXT_DIR="$DRONE_WORKSPACE_BASE"; fi
+      if [[ -z "$DOCKERFILE" ]]; then DOCKERFILE="$DRONE_WORKSPACE_BASE/Dockerfile"; fi
+
+      # add gitlab registry auth
+      if [[ "$ADD_CI_REGISTRY_AUTH" == "true" ]]; then
+        mkdir -p /kaniko/.docker
+        echo "{\"auths\":{\"$CI_REGISTRY\":{\"auth\":\"$(echo -n token:$CI_REGISTRY_PASSWORD | base64)\"}}}" > /kaniko/.docker/config.json
+      fi
+
+      IMAGE_DESTS=""
+
+      if [[ -n "$IMAGE_TAG" ]]; then
+        IMAGE_DESTS="$IMAGE_DESTS --destination $CI_REGISTRY_IMAGE:$IMAGE_TAG"
+      fi
+
+      # prepare kaniko args
+      if [[ -z "$KANIKO_ARGS" ]]; then
+        KANIKO_ARGS=""
+      fi
+      KANIKO_ARGS="--context $CONTEXT_DIR --dockerfile $DOCKERFILE $KANIKO_ARGS"
+
+      if [[ "KANIKO_SINGLE_SNAPSHOT" ]]; then
+        KANIKO_ARGS="$KANIKO_ARGS --single-snapshot"
+      fi
+
+      # build image
+      echo "kaniko args: $KANIKO_ARGS"
+      echo "pushing to destinations: $IMAGE_DESTS"
+      /kaniko/executor $KANIKO_ARGS $IMAGE_DESTS $ADDITIONAL_REGISTRY_DESTINATIONS
 
 steps:
 
   - <<: *ContainerImageKaniko
     name: ansible
     environment:
-      ADDITIONAL_REGISTRY_DESTINATIONS: "--destination gitea.msqu.de/devops/molecule:ansible"
+      IMAGE_TAG: "ansible"
       DOCKERFILE: ./Ansible
       KANIKO_ARGS: "--build-arg FROM=python:3-alpine"
 
   - <<: *ContainerImageKaniko
     name: ansible-dind
     environment:
-      ADDITIONAL_REGISTRY_DESTINATIONS: "--destination gitea.msqu.de/devops/molecule:ansible-dind"
+      IMAGE_TAG: "ansible-dind"
       DOCKERFILE: ./Ansible
       KANIKO_ARGS: "--build-arg FROM=docker:dind"
 
   - <<: *ContainerImageKaniko
     name: archlinux
     environment:
-      ADDITIONAL_REGISTRY_DESTINATIONS: "--destination gitea.msqu.de/devops/molecule:archlinux"
+      IMAGE_TAG: "archlinux"
       DOCKERFILE: ./Archlinux
 
   - <<: *ContainerImageKaniko
@@ -34,34 +76,34 @@ steps:
   - <<: *ContainerImageKaniko
     name: debian-10
     environment:
-      ADDITIONAL_REGISTRY_DESTINATIONS: "--destination gitea.msqu.de/devops/molecule:buster"
+      IMAGE_TAG: "debian-10"
       DOCKERFILE: ./Debian
       KANIKO_ARGS: "--build-arg OS_VERSION=buster"
 
   - <<: *ContainerImageKaniko
     name: debian-11
     environment:
-      ADDITIONAL_REGISTRY_DESTINATIONS: "--destination gitea.msqu.de/devops/molecule:bullseye"
+      IMAGE_TAG: "debian-11"
       DOCKERFILE: ./Debian
       KANIKO_ARGS: "--build-arg OS_VERSION=bullseye"
 
   - <<: *ContainerImageKaniko
     name: debian-12
     environment:
-      ADDITIONAL_REGISTRY_DESTINATIONS: "--destination gitea.msqu.de/devops/molecule:bookworm"
+      IMAGE_TAG: "debian-12"
       DOCKERFILE: ./Debian
       KANIKO_ARGS: "--build-arg OS_VERSION=bookworm"
 
   - <<: *ContainerImageKaniko
     name: ubuntu-20.04
     environment:
-      ADDITIONAL_REGISTRY_DESTINATIONS: "--destination gitea.msqu.de/devops/molecule:ubuntu-20.04"
+      IMAGE_TAG: "ubuntu-20.04"
       DOCKERFILE: ./Ubuntu
       KANIKO_ARGS: "--build-arg OS_VERSION=20.04"
 
   - <<: *ContainerImageKaniko
     name: ubuntu-22.04
     environment:
-      ADDITIONAL_REGISTRY_DESTINATIONS: "--destination gitea.msqu.de/devops/molecule:ubuntu-22.04"
+      IMAGE_TAG: "ubuntu-22.04"
       DOCKERFILE: ./Ubuntu
       KANIKO_ARGS: "--build-arg OS_VERSION=22.04"
