@@ -9,7 +9,7 @@ dnspython
 hcloud
 jmespath
 kubernetes-validate
-molecule
+molecule<4.0.2
 molecule-docker
 molecule-podman
 netaddr
