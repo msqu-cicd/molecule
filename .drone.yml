@@ -8,4 +8,5 @@ steps:
 - <<: *ContainerImageKaniko
   name: lint
   environment:
+    ADDITIONAL_REGISTRY_DESTINATIONS: "lint"
     DOCKERFILE: ./Lint
