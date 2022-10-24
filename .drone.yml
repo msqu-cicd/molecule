@@ -9,6 +9,5 @@ steps:
   name: ansible
   environment:
     ADDITIONAL_REGISTRY_DESTINATIONS: "python:3-alpine"
-    DOCKERFILE:
-    VERSION: "python:3-alpine"
-    KANIKO_ARGS: "--build-arg VERSION=${VERSION:-'latest'}"
+    DOCKERFILE: ./Ansible
+    KANIKO_ARGS: "--build-arg VERSION=python:3-alpine"
