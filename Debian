@@ -1,6 +1,6 @@
-ARG VERSION=stable
+ARG OS_VERSION=stable
 
-FROM debian:${VERSION}
+FROM debian:${OS_VERSION}
 
 ARG DEBIAN_FRONTEND=noninteractive
 

@@ -1,6 +1,6 @@
-ARG VERSION="python:3-alpine"
+ARG FROM="python:3-alpine"
 
-FROM ${VERSION}
+FROM ${FROM}
 
 COPY requirements.in /requirements.in
 

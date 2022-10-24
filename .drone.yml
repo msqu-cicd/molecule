@@ -5,8 +5,63 @@ name: default
 
 steps:
 
-- <<: *ContainerImageKaniko
-  name: lint
-  environment:
-    ADDITIONAL_REGISTRY_DESTINATIONS: "--destination gitea.msqu.de/devops/molecule:lint"
-    DOCKERFILE: ./Lint
+  - <<: *ContainerImageKaniko
+    name: ansible
+    environment:
+      ADDITIONAL_REGISTRY_DESTINATIONS: "--destination gitea.msqu.de/devops/molecule:ansible"
+      DOCKERFILE: ./Ansible
+      KANIKO_ARGS: "--build-arg FROM=python:3-alpine"
+
+  - <<: *ContainerImageKaniko
+    name: ansible-dind
+    environment:
+      ADDITIONAL_REGISTRY_DESTINATIONS: "--destination gitea.msqu.de/devops/molecule:ansible-dind"
+      DOCKERFILE: ./Ansible
+      KANIKO_ARGS: "--build-arg FROM=docker:dind"
+
+  - <<: *ContainerImageKaniko
+    name: archlinux
+    environment:
+      ADDITIONAL_REGISTRY_DESTINATIONS: "--destination gitea.msqu.de/devops/molecule:archlinux"
+      DOCKERFILE: ./Archlinux
+
+  - <<: *ContainerImageKaniko
+    name: lint
+    environment:
+      ADDITIONAL_REGISTRY_DESTINATIONS: "--destination gitea.msqu.de/devops/molecule:lint"
+      DOCKERFILE: ./Lint
+
+  - <<: *ContainerImageKaniko
+    name: debian-10
+    environment:
+      ADDITIONAL_REGISTRY_DESTINATIONS: "--destination gitea.msqu.de/devops/molecule:buster"
+      DOCKERFILE: ./Debian
+      KANIKO_ARGS: "--build-arg OS_VERSION=buster"
+
+  - <<: *ContainerImageKaniko
+    name: debian-11
+    environment:
+      ADDITIONAL_REGISTRY_DESTINATIONS: "--destination gitea.msqu.de/devops/molecule:bullseye"
+      DOCKERFILE: ./Debian
+      KANIKO_ARGS: "--build-arg OS_VERSION=bullseye"
+
+  - <<: *ContainerImageKaniko
+    name: debian-12
+    environment:
+      ADDITIONAL_REGISTRY_DESTINATIONS: "--destination gitea.msqu.de/devops/molecule:bookworm"
+      DOCKERFILE: ./Debian
+      KANIKO_ARGS: "--build-arg OS_VERSION=bookworm"
+
+  - <<: *ContainerImageKaniko
+    name: ubuntu-20.04
+    environment:
+      ADDITIONAL_REGISTRY_DESTINATIONS: "--destination gitea.msqu.de/devops/molecule:ubuntu-20.04"
+      DOCKERFILE: ./Ubuntu
+      KANIKO_ARGS: "--build-arg OS_VERSION=20.04"
+
+  - <<: *ContainerImageKaniko
+    name: ubuntu-22.04
+    environment:
+      ADDITIONAL_REGISTRY_DESTINATIONS: "--destination gitea.msqu.de/devops/molecule:ubuntu-22.04"
+      DOCKERFILE: ./Ubuntu
+      KANIKO_ARGS: "--build-arg OS_VERSION=22.04"
