@@ -1,0 +1,14 @@
+_include: https://gitea.msqu.de/devops/build_scripts/raw/branch/main/drone/ContainerImageKaniko.yml
+
+kind: pipeline
+name: default
+
+steps:
+
+- <<: *ContainerImageKaniko
+  name: ansible
+  environment:
+    ADDITIONAL_REGISTRY_DESTINATIONS: "python:3-alpine"
+    DOCKERFILE:
+    VERSION: "python:3-alpine"
+    KANIKO_ARGS: "--build-arg VERSION=${VERSION:-'latest'}"
