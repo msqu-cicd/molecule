@@ -6,8 +6,6 @@ name: default
 steps:
 
 - <<: *ContainerImageKaniko
-  name: ansible
+  name: lint
   environment:
-    ADDITIONAL_REGISTRY_DESTINATIONS: "python:3-alpine"
-    DOCKERFILE: ./Ansible
-    KANIKO_ARGS: "--build-arg VERSION=python:3-alpine"
+    DOCKERFILE: ./Lint
