@@ -8,5 +8,5 @@ steps:
 - <<: *ContainerImageKaniko
   name: lint
   environment:
-    ADDITIONAL_REGISTRY_DESTINATIONS: "lint"
+    ADDITIONAL_REGISTRY_DESTINATIONS: "gitea.msqu.de/devops/molecule:lint"
     DOCKERFILE: ./Lint
