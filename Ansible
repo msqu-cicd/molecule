@@ -17,4 +17,7 @@ RUN apk update && \
       git+https://github.com/ansible-community/molecule-hetznercloud && \
     apk del .build-deps && \
     mkdir -p ~/.ansible/plugins/modules && \
+    mkdir -p ~/.ansible/plugins/filter && \
     curl -o ~/.ansible/plugins/modules/aur.py https://raw.githubusercontent.com/kewlfft/ansible-aur/master/plugins/modules/aur.py
+
+COPY get_hetznercloud_networks.py ~/.ansible/plugins/filter/get_hetznercloud_networks.py
