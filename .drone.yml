@@ -60,7 +60,7 @@ steps:
     depends_on: [ clone ]
     environment:
       IMAGE_TAG: "ansible-dind"
-      DOCKERFILE: ./Ansible
+      DOCKERFILE: ./DinD
       KANIKO_ARGS: "--build-arg FROM=docker:dind"
 
   - <<: *ContainerImageKaniko
