@@ -64,6 +64,14 @@ steps:
       KANIKO_ARGS: "--build-arg FROM=docker:dind"
 
   - <<: *ContainerImageKaniko
+    name: slim
+    depends_on: [ clone ]
+    environment:
+      IMAGE_TAG: "slim"
+      DOCKERFILE: ./Slim.Dockerfile
+      KANIKO_ARGS: "--build-arg FROM=python:3-alpine"
+
+  - <<: *ContainerImageKaniko
     name: archlinux
     depends_on: [ clone ]
     environment:
