@@ -56,7 +56,7 @@ kind: pipeline
 name: os
 
 steps:
-   - <<: *ContainerImageDocker
+  - <<: *ContainerImageDocker
     name: archlinux
     environment:
       DOCKERFILE: ./Archlinux
