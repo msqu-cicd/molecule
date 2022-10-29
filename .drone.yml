@@ -12,6 +12,7 @@ steps:
       TAG_EXPLICIT: "ansible"
       DOCKERFILE: ./Ansible
       DOCKER_ARGS: "--build-arg FROM=python:3-alpine"
+      ADDITIONAL_REGISTRIES: "schmitzis/molecule:"
 
   - <<: *ContainerImageDocker
     name: ansible-dind
@@ -20,6 +21,7 @@ steps:
       TAG_EXPLICIT: "ansible-dind"
       DOCKERFILE: ./DinD
       DOCKER_ARGS: "--build-arg FROM=docker:dind"
+      ADDITIONAL_REGISTRIES: "schmitzis/molecule:"
 
   - <<: *ContainerImageDocker
     name: archlinux
@@ -27,6 +29,7 @@ steps:
     environment:
       TAG_EXPLICIT: "archlinux"
       DOCKERFILE: ./Archlinux
+      ADDITIONAL_REGISTRIES: "schmitzis/molecule:"
 
   - <<: *ContainerImageDocker
     name: lint
@@ -34,6 +37,7 @@ steps:
     environment:
       TAG_EXPLICIT: "lint"
       DOCKERFILE: ./Lint
+      ADDITIONAL_REGISTRIES: "schmitzis/molecule:"
 
   - <<: *ContainerImageDocker
     name: debian-10
@@ -42,6 +46,7 @@ steps:
       TAG_EXPLICIT: "debian-10"
       DOCKERFILE: ./Debian
       DOCKER_ARGS: "--build-arg OS_VERSION=buster"
+      ADDITIONAL_REGISTRIES: "schmitzis/molecule:"
 
   - <<: *ContainerImageDocker
     name: debian-11
@@ -50,6 +55,7 @@ steps:
       TAG_EXPLICIT: "debian-11"
       DOCKERFILE: ./Debian
       DOCKER_ARGS: "--build-arg OS_VERSION=bullseye"
+      ADDITIONAL_REGISTRIES: "schmitzis/molecule:"
 
   - <<: *ContainerImageDocker
     name: debian-12
@@ -58,6 +64,7 @@ steps:
       TAG_EXPLICIT: "debian-12"
       DOCKERFILE: ./Debian
       DOCKER_ARGS: "--build-arg OS_VERSION=bookworm"
+      ADDITIONAL_REGISTRIES: "schmitzis/molecule:"
 
   - <<: *ContainerImageDocker
     name: ubuntu-20.04
@@ -66,6 +73,7 @@ steps:
       TAG_EXPLICIT: "ubuntu-20.04"
       DOCKERFILE: ./Ubuntu
       DOCKER_ARGS: "--build-arg OS_VERSION=20.04"
+      ADDITIONAL_REGISTRIES: "schmitzis/molecule:"
 
   - <<: *ContainerImageDocker
     name: ubuntu-22.04
@@ -74,6 +82,7 @@ steps:
       TAG_EXPLICIT: "ubuntu-22.04"
       DOCKERFILE: ./Ubuntu
       DOCKER_ARGS: "--build-arg OS_VERSION=22.04"
+      ADDITIONAL_REGISTRIES: "schmitzis/molecule:"
 
 services:
   - <<: *ContainerImageDockerDinDService
