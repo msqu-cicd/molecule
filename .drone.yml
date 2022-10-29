@@ -1,4 +1,3 @@
----
 _include: https://gitea.msqu.de/devops/build_scripts/raw/branch/main/drone/ContainerImageDocker.yml
 
 
