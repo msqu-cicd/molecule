@@ -6,6 +6,18 @@ name: default
 
 steps:
   - <<: *ContainerImageDocker
+    name: lint
+    depends_on: [ clone ]
+    environment:
+      DOCKER_ARGS: "--build-arg ANSIBLE_LINT_VERSION=latest"
+      DOCKERFILE: ./Lint
+      TAG_EXPLICIT: "lint"
+      TAG_REF_NORMALIZED_ENABLE: "false"
+      ADDITIONAL_REGISTRIES: "schmitzis/molecule:"
+      REGISTRY_AUTH_JSON:
+        from_secret: DOCKER_HUB_AUTH_SCHMITZIS
+
+  - <<: *ContainerImageDocker
     name: ansible
     depends_on: [ clone ]
     environment:
@@ -31,7 +43,6 @@ steps:
 
   - <<: *ContainerImageDocker
     name: archlinux
-    depends_on: [ clone ]
     environment:
       DOCKERFILE: ./Archlinux
       TAG_EXPLICIT: "archlinux"
@@ -41,32 +52,7 @@ steps:
         from_secret: DOCKER_HUB_AUTH_SCHMITZIS
 
   - <<: *ContainerImageDocker
-    name: lint
-    depends_on: [ clone ]
-    environment:
-      DOCKER_ARGS: "--build-arg ANSIBLE_LINT_VERSION=latest"
-      DOCKERFILE: ./Lint
-      TAG_EXPLICIT: "lint"
-      TAG_REF_NORMALIZED_ENABLE: "false"
-      ADDITIONAL_REGISTRIES: "schmitzis/molecule:"
-      REGISTRY_AUTH_JSON:
-        from_secret: DOCKER_HUB_AUTH_SCHMITZIS
-
-  - <<: *ContainerImageDocker
-    name: debian-10
-    depends_on: [ clone ]
-    environment:
-      DOCKER_ARGS: "--build-arg OS_VERSION=buster"
-      DOCKERFILE: ./Debian
-      ADDITIONAL_REGISTRIES: "schmitzis/molecule:"
-      REGISTRY_AUTH_JSON:
-        from_secret: DOCKER_HUB_AUTH_SCHMITZIS
-      TAG_EXPLICIT: "debian-10"
-      TAG_REF_NORMALIZED_ENABLE: "false"
-
-  - <<: *ContainerImageDocker
     name: debian-11
-    depends_on: [ clone ]
     environment:
       DOCKERFILE: ./Debian
       DOCKER_ARGS: "--build-arg OS_VERSION=bullseye"
@@ -78,7 +64,6 @@ steps:
 
   - <<: *ContainerImageDocker
     name: debian-12
-    depends_on: [ clone ]
     environment:
       DOCKER_ARGS: "--build-arg OS_VERSION=bookworm"
       DOCKERFILE: ./Debian
@@ -90,7 +75,6 @@ steps:
 
   - <<: *ContainerImageDocker
     name: ubuntu-20.04
-    depends_on: [ clone ]
     environment:
       DOCKER_ARGS: "--build-arg OS_VERSION=20.04"
       DOCKERFILE: ./Ubuntu
@@ -102,7 +86,6 @@ steps:
 
   - <<: *ContainerImageDocker
     name: ubuntu-22.04
-    depends_on: [ clone ]
     environment:
       DOCKER_ARGS: "--build-arg OS_VERSION=22.04"
       DOCKERFILE: ./Ubuntu
