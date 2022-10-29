@@ -1,8 +1,9 @@
+---
 _include: https://gitea.msqu.de/devops/build_scripts/raw/branch/main/drone/ContainerImageDocker.yml
 
 
 kind: pipeline
-name: default
+name: infra
 
 steps:
   - <<: *ContainerImageDocker
@@ -41,7 +42,22 @@ steps:
       REGISTRY_AUTH_JSON:
         from_secret: DOCKER_HUB_AUTH_SCHMITZIS
 
-  - <<: *ContainerImageDocker
+services:
+  - <<: *ContainerImageDockerDinDService
+    name: svc_docker_dind
+
+volumes:
+  - <<: *ContainerImageDockerVolume
+
+---
+_include: https://gitea.msqu.de/devops/build_scripts/raw/branch/main/drone/ContainerImageDocker.yml
+
+
+kind: pipeline
+name: os
+
+steps:
+   - <<: *ContainerImageDocker
     name: archlinux
     environment:
       DOCKERFILE: ./Archlinux
