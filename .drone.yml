@@ -58,6 +58,7 @@ name: os
 steps:
   - <<: *ContainerImageDocker
     name: archlinux
+    depends_on: [ infra ]
     environment:
       DOCKERFILE: ./Archlinux
       TAG_EXPLICIT: "archlinux"
@@ -68,6 +69,7 @@ steps:
 
   - <<: *ContainerImageDocker
     name: debian-11
+    depends_on: [ infra ]
     environment:
       DOCKERFILE: ./Debian
       DOCKER_ARGS: "--build-arg OS_VERSION=bullseye"
@@ -79,6 +81,7 @@ steps:
 
   - <<: *ContainerImageDocker
     name: debian-12
+    depends_on: [ infra ]
     environment:
       DOCKER_ARGS: "--build-arg OS_VERSION=bookworm"
       DOCKERFILE: ./Debian
@@ -90,6 +93,7 @@ steps:
 
   - <<: *ContainerImageDocker
     name: ubuntu-20.04
+    depends_on: [ infra ]
     environment:
       DOCKER_ARGS: "--build-arg OS_VERSION=20.04"
       DOCKERFILE: ./Ubuntu
@@ -101,6 +105,7 @@ steps:
 
   - <<: *ContainerImageDocker
     name: ubuntu-22.04
+    depends_on: [ infra ]
     environment:
       DOCKER_ARGS: "--build-arg OS_VERSION=22.04"
       DOCKERFILE: ./Ubuntu
