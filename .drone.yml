@@ -13,6 +13,8 @@ steps:
       DOCKERFILE: ./Ansible
       DOCKER_ARGS: "--build-arg FROM=python:3-alpine"
       ADDITIONAL_REGISTRIES: "schmitzis/molecule:"
+      REGISTRY_AUTH_JSON:
+        from_secret: DOCKER_HUB_AUTH_SCHMITZIS
 
   - <<: *ContainerImageDocker
     name: ansible-dind
@@ -22,6 +24,8 @@ steps:
       DOCKERFILE: ./DinD
       DOCKER_ARGS: "--build-arg FROM=docker:dind"
       ADDITIONAL_REGISTRIES: "schmitzis/molecule:"
+      REGISTRY_AUTH_JSON:
+        from_secret: DOCKER_HUB_AUTH_SCHMITZIS
 
   - <<: *ContainerImageDocker
     name: archlinux
@@ -30,6 +34,8 @@ steps:
       TAG_EXPLICIT: "archlinux"
       DOCKERFILE: ./Archlinux
       ADDITIONAL_REGISTRIES: "schmitzis/molecule:"
+      REGISTRY_AUTH_JSON:
+        from_secret: DOCKER_HUB_AUTH_SCHMITZIS
 
   - <<: *ContainerImageDocker
     name: lint
@@ -38,6 +44,8 @@ steps:
       TAG_EXPLICIT: "lint"
       DOCKERFILE: ./Lint
       ADDITIONAL_REGISTRIES: "schmitzis/molecule:"
+      REGISTRY_AUTH_JSON:
+        from_secret: DOCKER_HUB_AUTH_SCHMITZIS
 
   - <<: *ContainerImageDocker
     name: debian-10
@@ -47,6 +55,8 @@ steps:
       DOCKERFILE: ./Debian
       DOCKER_ARGS: "--build-arg OS_VERSION=buster"
       ADDITIONAL_REGISTRIES: "schmitzis/molecule:"
+      REGISTRY_AUTH_JSON:
+        from_secret: DOCKER_HUB_AUTH_SCHMITZIS
 
   - <<: *ContainerImageDocker
     name: debian-11
@@ -56,6 +66,8 @@ steps:
       DOCKERFILE: ./Debian
       DOCKER_ARGS: "--build-arg OS_VERSION=bullseye"
       ADDITIONAL_REGISTRIES: "schmitzis/molecule:"
+      REGISTRY_AUTH_JSON:
+        from_secret: DOCKER_HUB_AUTH_SCHMITZIS
 
   - <<: *ContainerImageDocker
     name: debian-12
@@ -65,6 +77,8 @@ steps:
       DOCKERFILE: ./Debian
       DOCKER_ARGS: "--build-arg OS_VERSION=bookworm"
       ADDITIONAL_REGISTRIES: "schmitzis/molecule:"
+      REGISTRY_AUTH_JSON:
+        from_secret: DOCKER_HUB_AUTH_SCHMITZIS
 
   - <<: *ContainerImageDocker
     name: ubuntu-20.04
@@ -74,6 +88,8 @@ steps:
       DOCKERFILE: ./Ubuntu
       DOCKER_ARGS: "--build-arg OS_VERSION=20.04"
       ADDITIONAL_REGISTRIES: "schmitzis/molecule:"
+      REGISTRY_AUTH_JSON:
+        from_secret: DOCKER_HUB_AUTH_SCHMITZIS
 
   - <<: *ContainerImageDocker
     name: ubuntu-22.04
@@ -83,6 +99,8 @@ steps:
       DOCKERFILE: ./Ubuntu
       DOCKER_ARGS: "--build-arg OS_VERSION=22.04"
       ADDITIONAL_REGISTRIES: "schmitzis/molecule:"
+      REGISTRY_AUTH_JSON:
+        from_secret: DOCKER_HUB_AUTH_SCHMITZIS
 
 services:
   - <<: *ContainerImageDockerDinDService
