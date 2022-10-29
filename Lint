@@ -1,5 +1,5 @@
 FROM alpine:latest
 
-RUN apk --no-cache add ansible-lint shellcheck yamllint
+RUN apk --no-cache add bash ansible-lint shellcheck yamllint
 
 CMD ["/bin/bash"]
