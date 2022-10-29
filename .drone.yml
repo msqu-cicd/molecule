@@ -9,10 +9,11 @@ steps:
     name: ansible
     depends_on: [ clone ]
     environment:
-      TAG_EXPLICIT: "ansible"
-      DOCKERFILE: ./Ansible
       DOCKER_ARGS: "--build-arg FROM=python:3-alpine"
-      ADDITIONAL_REGISTRIES: "schmitzis/molecule:"
+      DOCKERFILE: ./Ansible
+      TAG_EXPLICIT: "ansible"
+      TAG_REF_NORMALIZED_ENABLE: "false"
+      ADDITIONAL_REGISTRIES: "schmitzis/builder:"
       REGISTRY_AUTH_JSON:
         from_secret: DOCKER_HUB_AUTH_SCHMITZIS
 
@@ -20,9 +21,10 @@ steps:
     name: ansible-dind
     depends_on: [ clone ]
     environment:
-      TAG_EXPLICIT: "ansible-dind"
-      DOCKERFILE: ./DinD
       DOCKER_ARGS: "--build-arg FROM=docker:dind"
+      DOCKERFILE: ./DinD
+      TAG_EXPLICIT: "ansible-dind"
+      TAG_REF_NORMALIZED_ENABLE: "false"
       ADDITIONAL_REGISTRIES: "schmitzis/molecule:"
       REGISTRY_AUTH_JSON:
         from_secret: DOCKER_HUB_AUTH_SCHMITZIS
@@ -31,8 +33,9 @@ steps:
     name: archlinux
     depends_on: [ clone ]
     environment:
-      TAG_EXPLICIT: "archlinux"
       DOCKERFILE: ./Archlinux
+      TAG_EXPLICIT: "archlinux"
+      TAG_REF_NORMALIZED_ENABLE: "false"
       ADDITIONAL_REGISTRIES: "schmitzis/molecule:"
       REGISTRY_AUTH_JSON:
         from_secret: DOCKER_HUB_AUTH_SCHMITZIS
@@ -41,8 +44,9 @@ steps:
     name: lint
     depends_on: [ clone ]
     environment:
-      TAG_EXPLICIT: "lint"
       DOCKERFILE: ./Lint
+      TAG_EXPLICIT: "lint"
+      TAG_REF_NORMALIZED_ENABLE: "false"
       ADDITIONAL_REGISTRIES: "schmitzis/molecule:"
       REGISTRY_AUTH_JSON:
         from_secret: DOCKER_HUB_AUTH_SCHMITZIS
@@ -51,20 +55,22 @@ steps:
     name: debian-10
     depends_on: [ clone ]
     environment:
-      TAG_EXPLICIT: "debian-10"
-      DOCKERFILE: ./Debian
       DOCKER_ARGS: "--build-arg OS_VERSION=buster"
+      DOCKERFILE: ./Debian
       ADDITIONAL_REGISTRIES: "schmitzis/molecule:"
       REGISTRY_AUTH_JSON:
         from_secret: DOCKER_HUB_AUTH_SCHMITZIS
+      TAG_EXPLICIT: "debian-10"
+      TAG_REF_NORMALIZED_ENABLE: "false"
 
   - <<: *ContainerImageDocker
     name: debian-11
     depends_on: [ clone ]
     environment:
-      TAG_EXPLICIT: "debian-11"
       DOCKERFILE: ./Debian
       DOCKER_ARGS: "--build-arg OS_VERSION=bullseye"
+      TAG_EXPLICIT: "debian-11"
+      TAG_REF_NORMALIZED_ENABLE: "false"
       ADDITIONAL_REGISTRIES: "schmitzis/molecule:"
       REGISTRY_AUTH_JSON:
         from_secret: DOCKER_HUB_AUTH_SCHMITZIS
@@ -73,9 +79,10 @@ steps:
     name: debian-12
     depends_on: [ clone ]
     environment:
-      TAG_EXPLICIT: "debian-12"
-      DOCKERFILE: ./Debian
       DOCKER_ARGS: "--build-arg OS_VERSION=bookworm"
+      DOCKERFILE: ./Debian
+      TAG_EXPLICIT: "debian-12"
+      TAG_REF_NORMALIZED_ENABLE: "false"
       ADDITIONAL_REGISTRIES: "schmitzis/molecule:"
       REGISTRY_AUTH_JSON:
         from_secret: DOCKER_HUB_AUTH_SCHMITZIS
@@ -84,9 +91,10 @@ steps:
     name: ubuntu-20.04
     depends_on: [ clone ]
     environment:
-      TAG_EXPLICIT: "ubuntu-20.04"
-      DOCKERFILE: ./Ubuntu
       DOCKER_ARGS: "--build-arg OS_VERSION=20.04"
+      DOCKERFILE: ./Ubuntu
+      TAG_EXPLICIT: "ubuntu-20.04"
+      TAG_REF_NORMALIZED_ENABLE: "false"
       ADDITIONAL_REGISTRIES: "schmitzis/molecule:"
       REGISTRY_AUTH_JSON:
         from_secret: DOCKER_HUB_AUTH_SCHMITZIS
@@ -95,9 +103,10 @@ steps:
     name: ubuntu-22.04
     depends_on: [ clone ]
     environment:
-      TAG_EXPLICIT: "ubuntu-22.04"
-      DOCKERFILE: ./Ubuntu
       DOCKER_ARGS: "--build-arg OS_VERSION=22.04"
+      DOCKERFILE: ./Ubuntu
+      TAG_EXPLICIT: "ubuntu-22.04"
+      TAG_REF_NORMALIZED_ENABLE: "false"
       ADDITIONAL_REGISTRIES: "schmitzis/molecule:"
       REGISTRY_AUTH_JSON:
         from_secret: DOCKER_HUB_AUTH_SCHMITZIS
