@@ -44,6 +44,7 @@ steps:
     name: lint
     depends_on: [ clone ]
     environment:
+      DOCKER_ARGS: "--build-arg ANSIBLE_LINT_VERSION=latest"
       DOCKERFILE: ./Lint
       TAG_EXPLICIT: "lint"
       TAG_REF_NORMALIZED_ENABLE: "false"
