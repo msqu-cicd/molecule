@@ -1,4 +1,4 @@
-FROM alpine:dge
+FROM alpine:edge
 
 RUN apk --no-cache add bash black ansible-lint git py3-jsonschema py3-pip shellcheck yamllint
 
