@@ -25,7 +25,7 @@ steps:
       DOCKERFILE: ./Ansible
       TAG_EXPLICIT: "ansible"
       TAG_REF_NORMALIZED_ENABLE: "false"
-      ADDITIONAL_REGISTRIES: "schmitzis/builder:"
+      ADDITIONAL_REGISTRIES: "schmitzis/molecule:"
       REGISTRY_AUTH_JSON:
         from_secret: DOCKER_HUB_AUTH_SCHMITZIS
 
