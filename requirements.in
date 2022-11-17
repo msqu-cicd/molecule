@@ -1,6 +1,7 @@
 # requirements.in
-ansible
+ansible<6.6.0
 ansible-compat
+ansible-core==2.13.5
 ansible-lint
 boto3
 botocore
