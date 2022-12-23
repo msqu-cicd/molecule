@@ -49,10 +49,30 @@ volumes:
   - <<: *ContainerImageDockerVolume
 
 ---
+_include: https://gitea.msqu.de/devops/build_scripts/raw/branch/main/drone/AnsibleTesting.yml
+
+kind: pipeline
+name: preflight
+
+depends_on:
+  - infra
+
+steps:
+
+  - <<: *AnsibleTestingAnsibleLint
+
+  - <<: *AnsibleTestingShellcheck
+
+  - <<: *AnsibleTestingYamllint
+
+---
 _include: https://gitea.msqu.de/devops/build_scripts/raw/branch/main/drone/Molecule.yml
 
 kind: pipeline
 name: molecule
+
+depends_on:
+  - preflight
 
 steps:
 
@@ -65,18 +85,10 @@ steps:
       MOLECULE_SCENARIO_NAME: docker
 
   - <<: *MoleculeDind
-    name: unit_debian-10
+    name: unit_debian-12
     environment:
       <<: *global-variables
-      MOLECULE_DISTRO: "debian-10"
-      TEST_TYPE: unit
-      MOLECULE_SCENARIO_NAME: docker
-
-  - <<: *MoleculeDind
-    name: unit_ubuntu-2204
-    environment:
-      <<: *global-variables
-      MOLECULE_DISTRO: "ubuntu-22.04"
+      MOLECULE_DISTRO: "debian-12"
       TEST_TYPE: unit
       MOLECULE_SCENARIO_NAME: docker
 
@@ -85,6 +97,14 @@ steps:
     environment:
       <<: *global-variables
       MOLECULE_DISTRO: "ubuntu-20.04"
+      TEST_TYPE: unit
+      MOLECULE_SCENARIO_NAME: docker
+
+  - <<: *MoleculeDind
+    name: unit_ubuntu-2204
+    environment:
+      <<: *global-variables
+      MOLECULE_DISTRO: "ubuntu-22.04"
       TEST_TYPE: unit
       MOLECULE_SCENARIO_NAME: docker
 
