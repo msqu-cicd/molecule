@@ -47,3 +47,50 @@ services:
 
 volumes:
   - <<: *ContainerImageDockerVolume
+
+---
+_include: https://gitea.msqu.de/devops/build_scripts/raw/branch/main/drone/Molecule.yml
+
+kind: pipeline
+name: molecule
+
+steps:
+
+  - <<: *MoleculeDind
+    name: unit_debian-11
+    environment:
+      <<: *global-variables
+      MOLECULE_DISTRO: "debian-11"
+      TEST_TYPE: unit
+      MOLECULE_SCENARIO_NAME: docker
+
+  - <<: *MoleculeDind
+    name: unit_debian-10
+    environment:
+      <<: *global-variables
+      MOLECULE_DISTRO: "debian-10"
+      TEST_TYPE: unit
+      MOLECULE_SCENARIO_NAME: docker
+
+  - <<: *MoleculeDind
+    name: unit_ubuntu-2204
+    environment:
+      <<: *global-variables
+      MOLECULE_DISTRO: "ubuntu-22.04"
+      TEST_TYPE: unit
+      MOLECULE_SCENARIO_NAME: docker
+
+  - <<: *MoleculeDind
+    name: unit_ubuntu-2004
+    environment:
+      <<: *global-variables
+      MOLECULE_DISTRO: "ubuntu-20.04"
+      TEST_TYPE: unit
+      MOLECULE_SCENARIO_NAME: docker
+
+services:
+  - <<: *ContainerImageDockerDinDService
+    name: svc_docker_dind
+
+volumes:
+  - <<: *ContainerImageDockerVolume
