@@ -55,6 +55,9 @@ _include: https://gitea.msqu.de/devops/build_scripts/raw/branch/main/drone/Conta
 kind: pipeline
 name: container
 
+depends_on:
+  - infra
+
 steps:
   - <<: *ContainerImageDocker
     name: debian-11
@@ -128,7 +131,7 @@ kind: pipeline
 name: preflight
 
 depends_on:
-  - infra
+  - container
 
 steps:
 
