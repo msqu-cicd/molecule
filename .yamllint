@@ -13,6 +13,7 @@ rules:
     allowed-values: ["yes", "no", "true", "false"]
 
 ignore: |
+  .drone.yml
   .github/
   .gitlab-ci.yml
   molecule/
