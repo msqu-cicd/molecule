@@ -48,6 +48,79 @@ services:
 volumes:
   - <<: *ContainerImageDockerVolume
 
+
+---
+_include: https://gitea.msqu.de/devops/build_scripts/raw/branch/main/drone/ContainerImageDocker.yml
+
+kind: pipeline
+name: container
+
+steps:
+  - <<: *ContainerImageDocker
+    name: debian-11
+    environment:
+      DOCKER_ARGS: "--build-arg OS_VERSION=bullseye"
+      DOCKER_MULTI_ARCH: "true"
+      DOCKERFILE: ./Debian
+      TAG_EXPLICIT: "debian-11"
+      TAG_REF_NORMALIZED_ENABLE: "false"
+      ADDITIONAL_REGISTRIES: "schmitzis/molecule:"
+      REGISTRY_AUTH_JSON:
+        from_secret: DOCKER_HUB_AUTH_SCHMITZIS
+
+  - <<: *ContainerImageDocker
+    name: debian-12
+    environment:
+      DOCKER_ARGS: "--build-arg OS_VERSION=bookworm"
+      DOCKER_MULTI_ARCH: "true"
+      DOCKERFILE: ./Debian
+      TAG_EXPLICIT: "debian-12"
+      TAG_REF_NORMALIZED_ENABLE: "false"
+      ADDITIONAL_REGISTRIES: "schmitzis/molecule:"
+      REGISTRY_AUTH_JSON:
+        from_secret: DOCKER_HUB_AUTH_SCHMITZIS
+
+  - <<: *ContainerImageDocker
+    name: ubuntu-20.04
+    environment:
+      DOCKER_ARGS: "--build-arg OS_VERSION=20.04"
+      DOCKER_MULTI_ARCH: "true"
+      DOCKERFILE: ./Ubuntu
+      TAG_EXPLICIT: "ubuntu-20.04"
+      TAG_REF_NORMALIZED_ENABLE: "false"
+      ADDITIONAL_REGISTRIES: "schmitzis/molecule:"
+      REGISTRY_AUTH_JSON:
+        from_secret: DOCKER_HUB_AUTH_SCHMITZIS
+
+  - <<: *ContainerImageDocker
+    name: ubuntu-22.04
+    environment:
+      DOCKER_ARGS: "--build-arg OS_VERSION=22.04"
+      DOCKER_MULTI_ARCH: "true"
+      DOCKERFILE: ./Ubuntu
+      TAG_EXPLICIT: "ubuntu-22.04"
+      TAG_REF_NORMALIZED_ENABLE: "false"
+      ADDITIONAL_REGISTRIES: "schmitzis/molecule:"
+      REGISTRY_AUTH_JSON:
+        from_secret: DOCKER_HUB_AUTH_SCHMITZIS
+
+  - <<: *ContainerImageDocker
+    name: archlinux
+    environment:
+      DOCKERFILE: ./Archlinux
+      TAG_EXPLICIT: "archlinux"
+      TAG_REF_NORMALIZED_ENABLE: "false"
+      ADDITIONAL_REGISTRIES: "schmitzis/molecule:"
+      REGISTRY_AUTH_JSON:
+        from_secret: DOCKER_HUB_AUTH_SCHMITZIS
+
+services:
+  - <<: *ContainerImageDockerDinDService
+    name: svc_docker_dind
+
+volumes:
+  - <<: *ContainerImageDockerVolume
+
 ---
 _include: https://gitea.msqu.de/devops/build_scripts/raw/branch/main/drone/AnsibleTesting.yml
 
