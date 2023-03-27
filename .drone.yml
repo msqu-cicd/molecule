@@ -48,7 +48,6 @@ services:
 volumes:
   - <<: *ContainerImageDockerVolume
 
-
 ---
 _include: https://gitea.msqu.de/devops/build_scripts/raw/branch/main/drone/ContainerImageDocker.yml
 
