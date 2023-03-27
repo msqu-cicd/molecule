@@ -24,7 +24,7 @@ RANDOM_SUBNET_NAME=$(shell cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 16 | hea
 	cp -r . $(TMPDIR_PROJECT)
 	#if compgen -G '${CI_MOLECULE_DIRECTORY}/*' >/dev/null; then rsync -avzh --ignore-existing --ignore-errors ${CI_MOLECULE_DIRECTORY} $(TMPDIR)/molecule/default/ ;fi
 	mkdir -p $(TMPDIR_PROJECT)/molecule/default/
-	cd $(TMPDIR_GIT) && git clone git@gitlab.com:msqu/ansible/molecule.git && rsync -avzh --ignore-existing --ignore-errors molecule/${DRIVER}/ $(TMPDIR_PROJECT)/molecule/default/
+	cd $(TMPDIR_GIT) && git clone ssh://git@gitea.msqu.de:22222/ansible/molecule.git && rsync -avzh --ignore-existing --ignore-errors molecule/${DRIVER}/ $(TMPDIR_PROJECT)/molecule/default/
 	yq -i 'del(.provisioner.inventory)' $(TMPDIR_PROJECT)/molecule/default/molecule.yml
 
 .PHONY: converge

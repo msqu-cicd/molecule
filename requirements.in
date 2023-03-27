@@ -11,7 +11,8 @@ hcloud
 jmespath
 kubernetes-validate
 molecule
-molecule-docker
+molecule-plugins[ec2]
+molecule-plugins[docker]
 netaddr
 ruamel.yaml
 pyaml
