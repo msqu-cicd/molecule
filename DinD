@@ -1,6 +1,7 @@
 FROM docker:dind
 
 COPY requirements.in /requirements.in
+COPY collections.yml /collections.yml
 
 RUN apk update && \
     apk add --no-cache --virtual .build-deps \
@@ -9,5 +10,6 @@ RUN apk update && \
     pip3 install --no-cache-dir --no-compile pip-tools && pip-compile --unsafe-package packaging --unsafe-package setuptools /requirements.in && \
     pip3 install --no-cache-dir --no-compile -I packaging -I setuptools -r requirements.txt && \
     apk del .build-deps && \
+    ansible-galaxy collection install -r collections.yml && \
     mkdir -p ~/.ansible/plugins/modules && \
     curl -o ~/.ansible/plugins/modules/aur.py https://raw.githubusercontent.com/kewlfft/ansible-aur/master/plugins/modules/aur.py

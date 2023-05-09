@@ -1,5 +1,4 @@
 # requirements.in
-ansible
 ansible-compat
 ansible-core
 ansible-lint

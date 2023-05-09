@@ -1,0 +1,26 @@
+---
+collections:
+  # - name: ansible.posix
+  - name: https://github.com/ansible-collections/ansible.posix
+    type: git
+  # - name: community.crypto
+  - name: https://github.com/ansible-collections/community.crypto
+    type: git
+  # - name: community.docker
+  - name: https://github.com/ansible-collections/community.docker
+    type: git
+  # - name: community.general
+  - name: https://github.com/ansible-collections/community.general
+    type: git
+  # - name: kubernetes.core
+  - name: https://github.com/ansible-collections/kubernetes.core
+    type: git
+  # - name: containers.podman
+  - name: https://github.com/containers/ansible-podman-collections.git
+    type: git
+  # - name: kewlfft.aur
+  - name: https://github.com/kewlfft/ansible-aur.git
+    type: git
+  # - name: geerlingguy.mac
+  - name: https://github.com/geerlingguy/ansible-collection-mac
+    type: git
