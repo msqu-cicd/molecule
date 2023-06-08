@@ -1,7 +1,7 @@
 # requirements.in
 ansible-compat
 ansible-core
-ansible-lint
+ansible-lint<6.17
 boto3
 botocore
 cryptography
