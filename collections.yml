@@ -12,6 +12,9 @@ collections:
   - name: community.crypto
   # - name: https://github.com/ansible-collections/community.crypto
   #   type: git
+  - name: community.dns
+  # - name: https://github.com/ansible-collections/community.dns
+  #   type: git
   - name: community.docker
   # - name: https://github.com/ansible-collections/community.docker
   #   type: git
