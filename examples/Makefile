@@ -43,7 +43,7 @@ ansible-lint:
 	$(CONTAINER_RUNTIME) run --rm \
 		-v $(CURDIR):/git -w /git \
 		$(MOLECULE_LINT_IMAGE) \
-		ansible-lint --force-color -p --offline /git
+		ansible-lint --force-color /git
 
 .PHONY: yamllint
 yamllint:

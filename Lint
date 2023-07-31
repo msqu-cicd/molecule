@@ -3,7 +3,7 @@ FROM alpine:latest
 COPY collections.yml /collections.yml
 
 RUN apk --no-cache add bash curl ansible-lint black py3-jsonschema py3-pip shellcheck yamllint && \
-    pip3 install --no-cache-dir ansible-lint==6.16.2 && \
+    pip3 install --no-cache-dir ansible-lint && \
     ansible-galaxy collection install -r collections.yml
 
 CMD ["/bin/bash"]
