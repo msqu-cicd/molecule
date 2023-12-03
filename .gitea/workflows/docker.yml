@@ -23,13 +23,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - dockerfile: dockerfiles/Lint
+          - dockerfile: Lint
             tags: lint
             build-args: "ANSIBLE_LINT_VERSION=latest"
-          - dockerfile: dockerfiles/Ansible
+          - dockerfile: Ansible
             tags: ansible
             build-args: "FROM=python:3-alpine"
-          - dockerfile: dockerfiles/DinD
+          - dockerfile: DinD
             tags: ansible-dind
             build-args: "FROM=docker:dind"
 
@@ -56,7 +56,7 @@ jobs:
         id: docker_build
         uses: docker/build-push-action@v5
         with:
-          context: .
+          context: dockerfiles
           file: ${{ matrix.dockerfile }}
           build-args: ${{ matrix.build-args }}
           push: ${{ github.event_name != 'pull_request' }}
