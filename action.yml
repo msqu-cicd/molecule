@@ -4,52 +4,39 @@ description: Run Ansible Molecule
 author: Michael Schmitz
 
 inputs:
-  ansible_current_version:
-    description: Ansible version to use for 'ansible_current' scenario
-    default: '==2.13.*'
-  ansible_next_version:
-    description: Ansible version to use for 'ansible_next' scenario
-    default: '==2.14.*'
-  ansible_scenario:
-    description: 'Predefined ansible versions: ansible_current, ansible_next, ansible_latest'
-    default: ''
   ansible_version:
     description: Ansible version to use, leave empty for newest
     default: ''
   distro:
     description: 'Execute tests against distribution'
-    default: 'ubuntu-20.04'
+    default: 'debian-12'
   molecule_scenario:
     description: Molecule scenario for testing
-    default: 'docker'
+    default: 'hetznercloud'
   molecule_version:
     description: Molecule version to use, leave empty for newest
     default: ''
   python_version:
     description: Python version to use
     default: '3.x'
-  jinja2_current_version:
-    description: Jinaj2 version to use for 'ansible_current' scenario
-    default: '==3.1.2'
   jinja2_version:
     description: Jinaj2 version to use, leave empty for newest
     default: ''
   test_type:
-    description: 'Choose between: unit'
+    description: 'Choose between: unit|integration'
     default: 'unit'
 
 runs:
   using: "composite"
   steps:
     - name: Check out the codebase
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Check out the molecule repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
-        repository: Rheinwerk/molecule
+        repository: https://gitea.msqu.de/ansible/molecule.git
         path: 'git_molecule'
-        ref: v1
 
     - name: Set up Python 3
       uses: actions/setup-python@v4
@@ -71,6 +58,18 @@ runs:
       run: echo "CI_PROJECT_NAME_MOLECULE=$(echo $GITHUB_REPOSITORY_OWNER | tr '_' '-')" >> $GITHUB_ENV
       shell: bash
 
+    - name: Prepare Ansible Vault
+      run: echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > "$GITHUB_WORKSPACE/.vault"
+      shell: bash
+
+    - name: Prepare SSH Key / Config
+      run: |
+        mkdir -p ~/.ssh/ && echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+        echo -e "Host *\n StrictHostKeyChecking no\n UserKnownHostsFile=/dev/null\n" > ~/.ssh/config
+        eval "$(ssh-agent -s)" && echo "${{ secrets.SSH_PRIVATE_KEY }}" | tr -d '\r' | ssh-add - >/dev/null
+      shell: bash
+
+    ### test until here
     - name: Prepare Molecule Scenario
       run: |
         mkdir -p ${GITHUB_WORKSPACE}/molecule/default
@@ -85,23 +84,7 @@ runs:
       env:
         TEST_TYPE: "${{ inputs.test_type }}"
 
-    - name: Install software for 'ansible_current' scenario
-      if: "${{ inputs.ansible_scenario == 'ansible_current' }}"
-      run: pip install 'ansible-core${{ inputs.ansible_current_version }}' 'molecule${{ inputs.molecule_version }}' molecule-plugins[docker] docker netaddr jmespath dnspython 'Jinja2${{ inputs.jinja2_current_version }}'
-      shell: bash
-
-    - name: Install software for 'ansible_next' scenario
-      if: "${{ inputs.ansible_scenario == 'ansible_next' }}"
-      run: pip install 'ansible-core${{ inputs.ansible_next_version }}' 'molecule${{ inputs.molecule_version }}' molecule-plugins[docker] docker netaddr jmespath dnspython 'Jinja2${{ inputs.jinja2_version }}'
-      shell: bash
-
-    - name: Install software for 'ansible_latest' scenario
-      if: "${{ inputs.ansible_scenario == 'ansible_latest' }}"
-      run: pip install 'ansible-core${{ inputs.ansible_version }}' 'molecule${{ inputs.molecule_version }}' molecule-plugins[docker] docker netaddr jmespath dnspython 'Jinja2${{ inputs.jinja2_version }}'
-      shell: bash
-
     - name: Install software for generic use case
-      if: "${{ inputs.ansible_scenario == '' }}"
       run: pip install 'ansible-core${{ inputs.ansible_version }}' 'molecule${{ inputs.molecule_version }}' molecule-plugins[docker] docker netaddr jmespath dnspython 'Jinja2${{ inputs.jinja2_version }}'
       shell: bash
 
