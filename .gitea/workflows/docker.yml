@@ -30,7 +30,7 @@ jobs:
             tags: gitea.msqu.de/devops/molecule:ansible
             build-args: "FROM=python:3-alpine"
           - dockerfile: DinD
-            tags:  gitea.msqu.de/devops/molecule:ansible-dind
+            tags: gitea.msqu.de/devops/molecule:ansible-dind
             build-args: "FROM=docker:dind"
 
     steps:
