@@ -24,13 +24,13 @@ jobs:
       matrix:
         include:
           - dockerfile: Lint
-            tags: lint
+            tags: gitea.msqu.de/devops/molecule:lint
             build-args: "ANSIBLE_LINT_VERSION=latest"
           - dockerfile: Ansible
-            tags: ansible
+            tags: gitea.msqu.de/devops/molecule:ansible
             build-args: "FROM=python:3-alpine"
           - dockerfile: DinD
-            tags: ansible-dind
+            tags:  gitea.msqu.de/devops/molecule:ansible-dind
             build-args: "FROM=docker:dind"
 
     steps:
