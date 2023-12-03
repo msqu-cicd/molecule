@@ -57,7 +57,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ./dockerfiles
-          file: ./dockerfiles${{ matrix.dockerfile }}
+          file: ./dockerfiles/${{ matrix.dockerfile }}
           build-args: ${{ matrix.build-args }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ matrix.tags }}
