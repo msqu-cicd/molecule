@@ -1,0 +1,136 @@
+---
+name: Ansible Molecule
+description: Run Ansible Molecule
+author: Michael Schmitz
+
+inputs:
+  ansible_current_version:
+    description: Ansible version to use for 'ansible_current' scenario
+    default: '==2.13.*'
+  ansible_next_version:
+    description: Ansible version to use for 'ansible_next' scenario
+    default: '==2.14.*'
+  ansible_scenario:
+    description: 'Predefined ansible versions: ansible_current, ansible_next, ansible_latest'
+    default: ''
+  ansible_version:
+    description: Ansible version to use, leave empty for newest
+    default: ''
+  distro:
+    description: 'Execute tests against distribution'
+    default: 'ubuntu-20.04'
+  molecule_scenario:
+    description: Molecule scenario for testing
+    default: 'docker'
+  molecule_version:
+    description: Molecule version to use, leave empty for newest
+    default: ''
+  python_version:
+    description: Python version to use
+    default: '3.x'
+  jinja2_current_version:
+    description: Jinaj2 version to use for 'ansible_current' scenario
+    default: '==3.1.2'
+  jinja2_version:
+    description: Jinaj2 version to use, leave empty for newest
+    default: ''
+  test_type:
+    description: 'Choose between: unit'
+    default: 'unit'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Check out the codebase
+      uses: actions/checkout@v3
+
+    - name: Check out the molecule repository
+      uses: actions/checkout@v3
+      with:
+        repository: Rheinwerk/molecule
+        path: 'git_molecule'
+        ref: v1
+
+    - name: Set up Python 3
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ inputs.python_version }}
+
+    # https://github.com/actions/runner-images/blob/main/images/linux/Ubuntu2204-Readme.md
+    - name: Uninstall preinstalled software
+      run: sudo apt-get purge -y ansible python3-jinja2
+      shell: bash
+
+    - name: Set CI_HOSTNAME
+      run: echo "CI_HOSTNAME=$(echo $MOLECULE_DISTRO | tr -dc '[:alnum:]\n\r' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+      shell: bash
+      env:
+        MOLECULE_DISTRO: "${{ inputs.distro }}"
+
+    - name: Set CI_PROJECT_NAME_MOLECULE
+      run: echo "CI_PROJECT_NAME_MOLECULE=$(echo $GITHUB_REPOSITORY_OWNER | tr '_' '-')" >> $GITHUB_ENV
+      shell: bash
+
+    - name: Prepare Molecule Scenario
+      run: |
+        mkdir -p ${GITHUB_WORKSPACE}/molecule/default
+        rsync -avzh --ignore-existing --ignore-errors git_molecule/scenarios/$MOLECULE_SCENARIO_NAME/ ${GITHUB_WORKSPACE}/molecule/default/
+      shell: bash
+      env:
+        MOLECULE_SCENARIO_NAME: "${{ inputs.molecule_scenario }}"
+
+    - name: Sync test vars
+      run: if [[ "$TEST_TYPE" == "unit" ]] && [[ -f "${GITHUB_WORKSPACE}/tests/vars.yml" ]]; then mkdir -p ${GITHUB_WORKSPACE}/molecule/default/group_vars/all/ && rsync -aP ${GITHUB_WORKSPACE}/tests/vars.yml ${GITHUB_WORKSPACE}/molecule/default/group_vars/all/test_vars.yml; fi
+      shell: bash
+      env:
+        TEST_TYPE: "${{ inputs.test_type }}"
+
+    - name: Install software for 'ansible_current' scenario
+      if: "${{ inputs.ansible_scenario == 'ansible_current' }}"
+      run: pip install 'ansible-core${{ inputs.ansible_current_version }}' 'molecule${{ inputs.molecule_version }}' molecule-plugins[docker] docker netaddr jmespath dnspython 'Jinja2${{ inputs.jinja2_current_version }}'
+      shell: bash
+
+    - name: Install software for 'ansible_next' scenario
+      if: "${{ inputs.ansible_scenario == 'ansible_next' }}"
+      run: pip install 'ansible-core${{ inputs.ansible_next_version }}' 'molecule${{ inputs.molecule_version }}' molecule-plugins[docker] docker netaddr jmespath dnspython 'Jinja2${{ inputs.jinja2_version }}'
+      shell: bash
+
+    - name: Install software for 'ansible_latest' scenario
+      if: "${{ inputs.ansible_scenario == 'ansible_latest' }}"
+      run: pip install 'ansible-core${{ inputs.ansible_version }}' 'molecule${{ inputs.molecule_version }}' molecule-plugins[docker] docker netaddr jmespath dnspython 'Jinja2${{ inputs.jinja2_version }}'
+      shell: bash
+
+    - name: Install software for generic use case
+      if: "${{ inputs.ansible_scenario == '' }}"
+      run: pip install 'ansible-core${{ inputs.ansible_version }}' 'molecule${{ inputs.molecule_version }}' molecule-plugins[docker] docker netaddr jmespath dnspython 'Jinja2${{ inputs.jinja2_version }}'
+      shell: bash
+
+    - name: Pip list
+      run: pip list
+      shell: bash
+
+    - name: Install collections from collections.yml
+      if: "${{ inputs.ansible_scenario != '' }}"
+      run: ansible-galaxy install -r git_molecule/requirements/collections_${{ inputs.ansible_scenario }}.yml
+      shell: bash
+
+    - name: Print molecule version infos
+      run: molecule --version
+      shell: bash
+
+    - name: Print installed ansible collections
+      run: ansible-galaxy collection list
+      shell: bash
+
+    - name: Run Molecule tests
+      run: molecule test
+      shell: bash
+      env:
+        ANSIBLE_FORCE_COLOR: '1'
+        ANSIBLE_VERBOSITY: '2'
+        CI_JOB_ID: "${{ github.run_id }}"
+        MOLECULE_DEBUG: '1'
+        MOLECULE_DISTRO: "${{ inputs.distro }}"
+        MOLECULE_SCENARIO_NAME: "${{ inputs.molecule_scenario }}"
+        PY_COLORS: '1'
+        TEST_TYPE: "${{ inputs.test_type }}"
