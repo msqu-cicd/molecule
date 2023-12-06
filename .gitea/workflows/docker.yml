@@ -50,7 +50,7 @@ jobs:
         with:
           registry: gitea.msqu.de
           username: $GITHUB_ACTOR
-          password: ${{ secrets.PAT}}
+          password: ${{ secrets.ACT_RUNNER_PAT }}
 
       - name: Build and push
         id: docker_build
