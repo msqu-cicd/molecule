@@ -17,12 +17,12 @@ RUN set -eux \
 ARG ANSIBLE_LINT_VERSION
 RUN set -eux \
 	&& if [ "${ANSIBLE_LINT_VERSION}" = "latest" ]; then \
-		pip3 install --no-cache-dir --no-compile ansible-lint; \
+		pip3 install --no-cache-dir --no-compile --break-system-packages ansible-lint; \
 	else \
-		pip3 install --no-cache-dir --no-compile "ansible-lint>=${VERSION},<$(echo "${VERSION}+1" | bc)"; \
+		pip3 install --no-cache-dir --no-compile --break-system-packages "ansible-lint>=${VERSION},<$(echo "${VERSION}+1" | bc)"; \
 	fi \
 	\
-	&& pip3 install ansible yamllint\
+	&& pip3 install --no-cache-dir --no-compile --break-system-packages ansible yamllint\
 	\
 	&& find /usr/lib/ -name '__pycache__' -print0 | xargs -0 -n1 rm -rf \
 	&& find /usr/lib/ -name '*.pyc' -print0 | xargs -0 -n1 rm -rf

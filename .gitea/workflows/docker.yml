@@ -1,64 +1,75 @@
 ---
-name: Docker build and push
-
+name: Docker Build and Push
 on:
-  schedule:
-    - cron: "0 4 * * 0"
+  issue_comment:
   workflow_dispatch:
   pull_request:
-    branches:
-      - 'main'
-      - 'master'
   push:
-    branches:
-      - 'main'
-      - 'master'
-    tags:
-      - 'v*'
 
 jobs:
-  docker:
-    runs-on: ubuntu-22.04
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - dockerfile: Lint
-            tags: gitea.msqu.de/devops/molecule:lint
-            build-args: "ANSIBLE_LINT_VERSION=latest"
-          - dockerfile: Ansible
-            tags: gitea.msqu.de/devops/molecule:ansible
-            build-args: "FROM=python:3-alpine"
-          - dockerfile: DinD
-            tags: gitea.msqu.de/devops/molecule:ansible-dind
-            build-args: "FROM=docker:dind"
-
+  docker_image:
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: https://github.com/actions/checkout@v4
 
-      - name: set up qemu
-        uses: docker/setup-qemu-action@v3
+      # - id: information
+      #   uses: https://gitea.dhswt.de/actions/information@master
+
+      - name: Set up QEMU
+        uses: https://github.com/docker/setup-qemu-action@v3
         with:
           platforms: amd64,arm64
 
-      - name: set up docker buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Set up Docker Buildx
+        uses: https://github.com/docker/setup-buildx-action@v3
 
-      - name: Log in to the Container registry
-        uses: docker/login-action@v3
+      - name: Build and push Docker image Lint
+        uses: https://gitea.msqu.de/cicd/docker@master
+        #uses: https://gitea.dhswt.de/actions/docker@master
         with:
-          registry: gitea.msqu.de
-          username: $GITHUB_ACTOR
-          password: ${{ secrets.ACT_RUNNER_PAT }}
+          docker_context_dir: ${{ github.workspace }}/dockerfiles
+          dockerfile: ${{ github.workspace }}/dockerfiles/Lint
+          build_args: "ANSIBLE_LINT_VERSION=latest"
+          additional_registries: docker.io/schmitzis/molecule
+          tags_additional: lint
+          tag_commit_enable: false
+          tag_semver_enable: false
+          tag_ref_normalized_enable: false
+          registry_auth_json: ${{ secrets.DOCKER_HUB_AUTH_SCHMITZIS }}
+          docker_multiarch: true
+          ci_registry_password: ${{ secrets.ACT_RUNNER_PAT }}
 
-      - name: Build and push
-        id: docker_build
-        uses: docker/build-push-action@v5
+      - name: Build and push Docker image Ansible
+        if: success() || failure()
+        uses: https://gitea.msqu.de/cicd/docker@master
+        #uses: https://gitea.dhswt.de/actions/docker@master
         with:
-          context: ./dockerfiles
-          file: ./dockerfiles/${{ matrix.dockerfile }}
-          build-args: ${{ matrix.build-args }}
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ matrix.tags }}
-          platforms: linux/amd64,linux/arm64
+          docker_context_dir: ${{ github.workspace }}/dockerfiles
+          dockerfile: ${{ github.workspace }}/dockerfiles/Ansible
+          build_args: "FROM=python:3-alpine"
+          additional_registries: docker.io/schmitzis/molecule
+          tags_additional: ansible
+          tag_commit_enable: false
+          tag_semver_enable: false
+          tag_ref_normalized_enable: false
+          registry_auth_json: ${{ secrets.DOCKER_HUB_AUTH_SCHMITZIS }}
+          docker_multiarch: true
+          ci_registry_password: ${{ secrets.ACT_RUNNER_PAT }}
+
+      - name: Build and push Docker image DinD
+        if: success() || failure()
+        uses: https://gitea.msqu.de/cicd/docker@master
+        #uses: https://gitea.dhswt.de/actions/docker@master
+        with:
+          docker_context_dir: ${{ github.workspace }}/dockerfiles
+          dockerfile: ${{ github.workspace }}/dockerfiles/DinD
+          build_args: "FROM=docker:dind"
+          additional_registries: docker.io/schmitzis/molecule
+          tags_additional: dind
+          tag_commit_enable: false
+          tag_semver_enable: false
+          tag_ref_normalized_enable: false
+          registry_auth_json: ${{ secrets.DOCKER_HUB_AUTH_SCHMITZIS }}
+          docker_multiarch: true
+          ci_registry_password: ${{ secrets.ACT_RUNNER_PAT }}
