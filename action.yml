@@ -7,103 +7,137 @@ inputs:
   ansible_version:
     description: Ansible version to use, leave empty for newest
     default: ''
+  ansible_vault_password:
+    description: Ansible Vault Password
+    default: ''
   distro:
     description: 'Execute tests against distribution'
     default: 'debian-12'
+  hcloud_token:
+    description: 'Hetzner API Token'
+    default: ''
+  hcloud_server_state:
+    description: 'Server State after Molecule run'
+    default: 'absent'
   molecule_scenario:
     description: Molecule scenario for testing
     default: 'hetznercloud'
   molecule_version:
     description: Molecule version to use, leave empty for newest
     default: ''
-  python_version:
-    description: Python version to use
-    default: '3.x'
-  jinja2_version:
-    description: Jinaj2 version to use, leave empty for newest
-    default: ''
+  ssh_key:
+    description: 'SSH Key to use'
+    default: 'unit'
   test_type:
     description: 'Choose between: unit|integration'
+    default: 'unit'
+  token:
+    description: 'Gitea Runner token'
     default: 'unit'
 
 runs:
   using: "composite"
   steps:
-    - name: Check out the codebase
-      uses: actions/checkout@v4
-
-    - name: Check out the molecule repository
-      uses: actions/checkout@v4
-      with:
-        repository: https://gitea.msqu.de/ansible/molecule.git
-        path: 'git_molecule'
-
-    - name: Set up Python 3
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ inputs.python_version }}
-
-    # https://github.com/actions/runner-images/blob/main/images/linux/Ubuntu2204-Readme.md
-    - name: Uninstall preinstalled software
-      run: sudo apt-get purge -y ansible python3-jinja2
+    - name: Install rsync
+      run: apt-get update -qq -o=Dpkg::Use-Pty=0 && apt-get -qq -o Dpkg::Use-Pty=0 install rsync
       shell: bash
 
-    - name: Set CI_HOSTNAME
-      run: echo "CI_HOSTNAME=$(echo $MOLECULE_DISTRO | tr -dc '[:alnum:]\n\r' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+    - name: Check out the molecule repository
+      uses: https://github.com/actions/checkout@v4
+      with:
+        github-server-url: 'https://gitea.msqu.de'
+        repository: infrastructure/molecule
+        token: ${{ inputs.token }}
+        path: 'git_molecule'
+        ref: 'main'
+        show-progress: 'false'
+
+    - name: Check out the infra repository
+      uses: https://github.com/actions/checkout@v4
+      with:
+        github-server-url: 'https://gitea.msqu.de'
+        repository: infrastructure/infra
+        token: ${{ inputs.token }}
+        path: 'git_infra'
+        ref: 'main'
+        show-progress: 'false'
+        sparse-checkout: |
+          requirements
+          group_vars
+
+    - name: Set CI_HOSTNAME / CI_PROJECT_NAME_MOLECULE
+      run: |
+        echo "CI_HOSTNAME=$(echo $MOLECULE_DISTRO | tr -dc '[:alnum:]\n\r' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+        echo "CI_PROJECT_NAME_MOLECULE=$(echo ${GITHUB_REPOSITORY#*/} | tr '_' '-')" >> $GITHUB_ENV
       shell: bash
       env:
         MOLECULE_DISTRO: "${{ inputs.distro }}"
 
-    - name: Set CI_PROJECT_NAME_MOLECULE
-      run: echo "CI_PROJECT_NAME_MOLECULE=$(echo $GITHUB_REPOSITORY_OWNER | tr '_' '-')" >> $GITHUB_ENV
-      shell: bash
-
     - name: Prepare Ansible Vault
-      run: echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > "$GITHUB_WORKSPACE/.vault"
+      run: echo "${{ inputs.ansible_vault_password }}" > "$GITHUB_WORKSPACE/.vault"
       shell: bash
 
-    - name: Prepare SSH Key / Config
+    - name: Prepare SSH Key
       run: |
-        mkdir -p ~/.ssh/ && echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+        mkdir -p ~/.ssh/ && echo "${{ inputs.ssh_key }}" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
         echo -e "Host *\n StrictHostKeyChecking no\n UserKnownHostsFile=/dev/null\n" > ~/.ssh/config
-        eval "$(ssh-agent -s)" && echo "${{ secrets.SSH_PRIVATE_KEY }}" | tr -d '\r' | ssh-add - >/dev/null
+        eval "$(ssh-agent -s)" && echo "${{ inputs.ssh_key }}" | tr -d '\r' | ssh-add - >/dev/null
       shell: bash
 
-    ### test until here
     - name: Prepare Molecule Scenario
       run: |
         mkdir -p ${GITHUB_WORKSPACE}/molecule/default
-        rsync -avzh --ignore-existing --ignore-errors git_molecule/scenarios/$MOLECULE_SCENARIO_NAME/ ${GITHUB_WORKSPACE}/molecule/default/
+        rsync -avzh --ignore-existing --ignore-errors git_molecule/$MOLECULE_SCENARIO_NAME/ ${GITHUB_WORKSPACE}/molecule/default/
       shell: bash
       env:
         MOLECULE_SCENARIO_NAME: "${{ inputs.molecule_scenario }}"
 
-    - name: Sync test vars
-      run: if [[ "$TEST_TYPE" == "unit" ]] && [[ -f "${GITHUB_WORKSPACE}/tests/vars.yml" ]]; then mkdir -p ${GITHUB_WORKSPACE}/molecule/default/group_vars/all/ && rsync -aP ${GITHUB_WORKSPACE}/tests/vars.yml ${GITHUB_WORKSPACE}/molecule/default/group_vars/all/test_vars.yml; fi
+    - name: Sync vars
+      run: |
+        if [[ "$TEST_TYPE" == "unit" ]] && [[ -f "${GITHUB_WORKSPACE}/tests/vars.yml" ]]; then
+          mkdir -p ${GITHUB_WORKSPACE}/molecule/default/group_vars/all/ && rsync -aP ${GITHUB_WORKSPACE}/tests/vars.yml ${GITHUB_WORKSPACE}/molecule/default/group_vars/all/test_vars.yml
+        elif [[ "$TEST_TYPE" == "integration" ]]; then
+          rsync -aP git_infra/group_vars ${GITHUB_WORKSPACE}/molecule/default/
+        fi
       shell: bash
       env:
         TEST_TYPE: "${{ inputs.test_type }}"
 
+    - name: Update requirements.yml
+      run: |
+        if [ -f "${GITHUB_WORKSPACE}/requirements.yml" ]; then sed -i "s,ssh://git@gitea.msqu.de:22222/.*/,https://$GITHUB_TOKEN@github.com/${GITHUB_REPOSITORY_OWNER}/,g" ${GITHUB_WORKSPACE}/requirements.yml; fi
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.token }}
+
     - name: Install software for generic use case
-      run: pip install 'ansible-core${{ inputs.ansible_version }}' 'molecule${{ inputs.molecule_version }}' molecule-plugins[docker] docker netaddr jmespath dnspython 'Jinja2${{ inputs.jinja2_version }}'
+      run: pip install 'ansible-core${{ inputs.ansible_version }}' 'molecule${{ inputs.molecule_version }}' netaddr jmespath dnspython python-dateutil Jinja2 requests --quiet
       shell: bash
 
     - name: Pip list
+      if: runner.debug == '1'
       run: pip list
       shell: bash
 
     - name: Install collections from collections.yml
-      if: "${{ inputs.ansible_scenario != '' }}"
-      run: ansible-galaxy install -r git_molecule/requirements/collections_${{ inputs.ansible_scenario }}.yml
+      run: ansible-galaxy install -r git_infra/requirements/collections_git.yml
       shell: bash
 
     - name: Print molecule version infos
+      if: runner.debug == '1'
       run: molecule --version
       shell: bash
 
     - name: Print installed ansible collections
+      if: runner.debug == '1'
       run: ansible-galaxy collection list
       shell: bash
+
+    - name: Setup tmate session
+      if: runner.debug == '1'
+      uses: mxschmitt/action-tmate@v3
+      with:
+        detached: true
 
     - name: Run Molecule tests
       run: molecule test
@@ -117,3 +151,6 @@ runs:
         MOLECULE_SCENARIO_NAME: "${{ inputs.molecule_scenario }}"
         PY_COLORS: '1'
         TEST_TYPE: "${{ inputs.test_type }}"
+        CI_PROJECT_DIR: "$GITHUB_WORKSPACE"
+        HCLOUD_TOKEN: "${{ inputs.hcloud_token }}"
+        HCLOUD_SERVER_STATE: "${{ inputs.hcloud_server_state }}"
