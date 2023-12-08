@@ -27,7 +27,7 @@ inputs:
     default: ''
   ssh_key:
     description: 'SSH Key to use'
-    default: 'unit'
+    default: ''
   test_type:
     description: 'Choose between: unit|integration'
     default: 'unit'
@@ -78,6 +78,7 @@ runs:
       shell: bash
 
     - name: Prepare SSH Key
+      if: "${{ inputs.ssh_key }} != '' }}"
       run: |
         mkdir -p ~/.ssh/ && echo "${{ inputs.ssh_key }}" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
         echo -e "Host *\n StrictHostKeyChecking no\n UserKnownHostsFile=/dev/null\n" > ~/.ssh/config
