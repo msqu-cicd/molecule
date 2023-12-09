@@ -73,6 +73,10 @@ runs:
       env:
         MOLECULE_DISTRO: "${{ inputs.distro }}"
 
+    - name: List of the GitHub Actions environment variables
+      run: env
+      shell: bash
+
     - name: Prepare Ansible Vault
       run: echo "${{ inputs.ansible_vault_password }}" > "$GITHUB_WORKSPACE/.vault"
       shell: bash
