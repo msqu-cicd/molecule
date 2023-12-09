@@ -77,9 +77,9 @@ runs:
       run: env
       shell: bash
 
-    - name: Prepare Ansible Vault
-      run: echo "${{ inputs.ansible_vault_password }}" > "$GITHUB_WORKSPACE/.vault"
-      shell: bash
+    # - name: Prepare Ansible Vault
+    #   run: echo "${{ inputs.ansible_vault_password }}" > "$GITHUB_WORKSPACE/.vault"
+    #   shell: bash
 
     - name: Prepare SSH Key
       if: "${{ inputs.ssh_key }} != '' }}"
