@@ -19,6 +19,9 @@ inputs:
   hcloud_server_state:
     description: 'Server State after Molecule run'
     default: 'absent'
+  molecule_debug:
+    description: Whether to tell the GitHub client to log details of its requests
+    default: ${{ (env.RUNNER_DEBUG == '1' && 'true') || 'false' }}
   molecule_scenario:
     description: Molecule scenario for testing
     default: 'hetznercloud'
@@ -73,13 +76,9 @@ runs:
       env:
         MOLECULE_DISTRO: "${{ inputs.distro }}"
 
-    - name: List of the GitHub Actions environment variables
-      run: env
+    - name: Prepare Ansible Vault
+      run: echo "${{ inputs.ansible_vault_password }}" > "$GITHUB_WORKSPACE/.vault"
       shell: bash
-
-    # - name: Prepare Ansible Vault
-    #   run: echo "${{ inputs.ansible_vault_password }}" > "$GITHUB_WORKSPACE/.vault"
-    #   shell: bash
 
     - name: Prepare SSH Key
       if: "${{ inputs.ssh_key }} != '' }}"
@@ -151,11 +150,12 @@ runs:
         ANSIBLE_FORCE_COLOR: '1'
         ANSIBLE_VERBOSITY: '2'
         CI_JOB_ID: "${{ github.run_id }}"
-        MOLECULE_DEBUG: '1'
+        CI_PROJECT_DIR: "$GITHUB_WORKSPACE"
+        GITEA_TOKEN: "${{ inputs.token }}"
+        HCLOUD_SERVER_STATE: "${{ inputs.hcloud_server_state }}"
+        HCLOUD_TOKEN: "${{ inputs.hcloud_token }}"
+        MOLECULE_DEBUG: "${{ inputs.molecule_debug }}"
         MOLECULE_DISTRO: "${{ inputs.distro }}"
         MOLECULE_SCENARIO_NAME: "${{ inputs.molecule_scenario }}"
         PY_COLORS: '1'
         TEST_TYPE: "${{ inputs.test_type }}"
-        CI_PROJECT_DIR: "$GITHUB_WORKSPACE"
-        HCLOUD_TOKEN: "${{ inputs.hcloud_token }}"
-        HCLOUD_SERVER_STATE: "${{ inputs.hcloud_server_state }}"
