@@ -91,28 +91,22 @@ runs:
     - name: Prepare Molecule Scenario
       run: |
         mkdir -p ${GITHUB_WORKSPACE}/molecule/default
-        rsync -avzh --ignore-existing --ignore-errors git_molecule/$MOLECULE_SCENARIO_NAME/ ${GITHUB_WORKSPACE}/molecule/default/
+        rsync -avzh --ignore-existing --ignore-errors git_molecule/${{ inputs.molecule_scenario }}/ ${GITHUB_WORKSPACE}/molecule/default/
       shell: bash
-      env:
-        MOLECULE_SCENARIO_NAME: "${{ inputs.molecule_scenario }}"
 
     - name: Sync vars
       run: |
-        if [[ "$TEST_TYPE" == "unit" ]] && [[ -f "${GITHUB_WORKSPACE}/tests/vars.yml" ]]; then
+        if [[ "${{ inputs.test_type }}" == "unit" ]] && [[ -f "${GITHUB_WORKSPACE}/tests/vars.yml" ]]; then
           mkdir -p ${GITHUB_WORKSPACE}/molecule/default/group_vars/all/ && rsync -aP ${GITHUB_WORKSPACE}/tests/vars.yml ${GITHUB_WORKSPACE}/molecule/default/group_vars/all/test_vars.yml
-        elif [[ "$TEST_TYPE" == "integration" ]]; then
+        elif [[ "${{ inputs.test_type }}" == "integration" ]]; then
           rsync -aP git_infra/group_vars ${GITHUB_WORKSPACE}/molecule/default/
         fi
       shell: bash
-      env:
-        TEST_TYPE: "${{ inputs.test_type }}"
 
     - name: Update requirements.yml
       run: |
-        if [ -f "${GITHUB_WORKSPACE}/requirements.yml" ]; then sed -i "s,ssh://git@gitea.msqu.de:22222/.*/,https://$GITHUB_TOKEN@github.com/${GITHUB_REPOSITORY_OWNER}/,g" ${GITHUB_WORKSPACE}/requirements.yml; fi
+        if [ -f "${GITHUB_WORKSPACE}/requirements.yml" ]; then sed -i "s,ssh://git@gitea.msqu.de:22222/.*/,https://${{ inputs.token }}@github.com/${GITHUB_REPOSITORY_OWNER}/,g" ${GITHUB_WORKSPACE}/requirements.yml; fi
       shell: bash
-      env:
-        GITHUB_TOKEN: ${{ inputs.token }}
 
     - name: Install software for generic use case
       run: pip install 'ansible-core${{ inputs.ansible_version }}' 'molecule${{ inputs.molecule_version }}' netaddr jmespath dnspython python-dateutil Jinja2 requests --quiet
