@@ -1,4 +1,5 @@
 FROM docker:dind
+ENV PIP_BREAK_SYSTEM_PACKAGES 1
 
 COPY requirements.in /requirements.in
 COPY collections.yml /collections.yml
