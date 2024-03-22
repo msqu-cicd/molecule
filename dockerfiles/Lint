@@ -1,5 +1,5 @@
 FROM alpine:latest
-
+ENV PIP_BREAK_SYSTEM_PACKAGES 1
 COPY collections.yml /collections.yml
 
 RUN apk --no-cache add bash curl ansible-lint black py3-jsonschema py3-pip shellcheck yamllint && \
