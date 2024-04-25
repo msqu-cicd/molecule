@@ -24,6 +24,23 @@ jobs:
       - name: Set up Docker Buildx
         uses: https://github.com/docker/setup-buildx-action@v3
 
+      - name: Build and push Docker image Ubuntu Focal
+        if: success() || failure()
+        uses: https://gitea.msqu.de/cicd/docker@master
+        #uses: https://gitea.dhswt.de/actions/docker@master
+        with:
+          docker_context_dir: ${{ github.workspace }}/dockerfiles
+          dockerfile: ${{ github.workspace }}/dockerfiles/Ubuntu
+          build_args: "OS_VERSION=20.04"
+          additional_registries: docker.io/schmitzis/molecule
+          tags_additional: focal
+          tag_commit_enable: false
+          tag_semver_enable: false
+          tag_ref_normalized_enable: false
+          registry_auth_json: ${{ secrets.DOCKER_HUB_AUTH_SCHMITZIS }}
+          docker_multiarch: true
+          ci_registry_password: ${{ secrets.ACT_RUNNER_PAT }}
+
       - name: Build and push Docker image Lint
         uses: https://gitea.msqu.de/cicd/docker@master
         #uses: https://gitea.dhswt.de/actions/docker@master
