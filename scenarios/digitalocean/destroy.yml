@@ -1,0 +1,88 @@
+---
+- name: Destroy
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  no_log: "{{ molecule_no_log }}"
+  tasks:
+    - name: Check if SSH key already exists
+      ansible.builtin.stat:
+        path: ~/.ssh/id_rsa
+      register: id_rsa_stat
+
+    - name: Set digitalocean facts
+      ansible.builtin.set_fact:
+        digitalocean_server_state: "{{ lookup('ansible.builtin.env', 'DIGITALOCEAN_SERVER_STATE') or 'absent' }}"
+
+    - name: Populate the instance config
+      ansible.builtin.set_fact:
+        instance_conf: "{{ lookup('file', molecule_instance_config, errors='warn') | from_yaml }}"
+        skip_instances: false
+      register: instance_config_lookup
+
+    - name: Populate instance config when file missing
+      ansible.builtin.set_fact:
+        instance_conf: {}
+        skip_instances: true
+      when: not instance_config_lookup.ansible_facts.instance_conf
+
+    - name: Gather information about a specific droplet by name
+      community.digitalocean.digital_ocean_droplet_info:
+        name: "{{ item.name }}"
+      with_items: "{{ molecule_yml.platforms }}"
+      register: digital_ocean_droplet_info
+      when:
+        - not instance_config_lookup.ansible_facts.instance_conf
+
+    - name: Destroy DigitalOcean Server
+      block:
+        - name: Destroy molecule instance(s)
+          community.digitalocean.digital_ocean_droplet:
+            name: "{{ item.name }}"
+            unique_name: true
+            state: absent
+          register: server
+          with_items: "{{ molecule_yml.platforms }}"
+          async: 7200
+          poll: 0
+
+        - name: Wait for instance(s) deletion to complete
+          ansible.builtin.async_status:
+            jid: "{{ item.ansible_job_id }}"
+          register: digitalocean_jobs
+          until: digitalocean_jobs.finished
+          retries: 300
+          with_items: "{{ server.results }}"
+
+        - name: Pause for 1 minute before destroying VPC
+          ansible.builtin.pause:
+            minutes: 1
+
+        - name: Destroy private network(s)
+          community.digitalocean.digital_ocean_vpc:
+            name: molecule
+            region: "{{ item.region }}"
+            state: absent
+          with_items: "{{ molecule_yml.platforms }}"
+          register: networks
+
+        # Mandatory configuration for Molecule to function.
+        - name: Populate instance config
+          ansible.builtin.set_fact:
+            instance_conf: {}
+
+        - name: Dump instance config
+          ansible.builtin.copy:
+            content: "{{ instance_conf }}"
+            dest: "{{ molecule_instance_config }}"
+          when: server.changed | bool
+      when: digitalocean_server_state == 'absent'
+
+    - name: Delete remote keypair
+      community.digitalocean.digital_ocean_sshkey:
+        fingerprint: "{{ instance_conf[0].remote_keypair_id }}"
+        state: absent
+      when:
+        - not id_rsa_stat.stat.exists
+        - not skip_instances
+        - instance_conf | length  # must contain at least one instance

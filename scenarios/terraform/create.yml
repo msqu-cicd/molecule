@@ -1,0 +1,15 @@
+---
+- name: Create
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Display all variables/facts known for a host
+      ansible.builtin.debug:
+        var: hostvars[inventory_hostname]
+        verbosity: 4
+
+    - name: Remove original MOLECULE_INVENTORY_FILE
+      ansible.builtin.file:
+        path: "{{ lookup('env', 'MOLECULE_INVENTORY_FILE') }}"
+        state: absent

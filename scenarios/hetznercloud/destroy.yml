@@ -1,0 +1,147 @@
+---
+- name: Destroy
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  no_log: "{{ molecule_no_log }}"
+  vars:
+    ssh_id_path: "~/.ssh/id_ed25519"
+  tasks:
+    - name: Check if SSH key already exists
+      ansible.builtin.stat:
+        path: "{{ ssh_id_path }}"
+      register: id_ed25519_stat
+
+    - name: Set hetzner facts
+      ansible.builtin.set_fact:
+        hetzner_server_state: "{{ lookup('ansible.builtin.env', 'HCLOUD_SERVER_STATE') or 'stopped' }}"
+
+    - name: Print debug output
+      ansible.builtin.debug:
+        msg:
+          - "{{ hetzner_server_state }}"
+
+    - name: Populate the instance config
+      ansible.builtin.set_fact:
+        instance_conf: "{{ lookup('file', molecule_instance_config, errors='warn') | from_yaml }}"
+        skip_instances: false
+      register: instance_config_lookup
+
+    - name: Populate instance config when file missing
+      ansible.builtin.set_fact:
+        instance_conf: {}
+        skip_instances: true
+      when: not instance_config_lookup.ansible_facts.instance_conf
+
+    - name: Gather hcloud server infos
+      hetzner.hcloud.server_info:
+        name: "{{ item.name }}"
+      with_items: "{{ molecule_yml.platforms }}"
+      register: hcloud_server_info_output
+
+    - name: Destroy Hcloud Server
+      when:
+        - hetzner_server_state == 'absent'
+        - hcloud_server_info_output is defined
+        - hcloud_server_info_output.results is defined
+        - hcloud_server_info_output.results[0].hcloud_server_info[0].id is defined
+      block:
+        - name: Destroy molecule instance(s)
+          hetzner.hcloud.server:
+            name: "{{ item.name }}"
+            api_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
+            state: absent
+          register: server
+          with_items: "{{ molecule_yml.platforms }}"
+          async: 7200
+          poll: 0
+
+        - name: Wait for instance(s) deletion to complete
+          ansible.builtin.async_status:
+            jid: "{{ item.ansible_job_id }}"
+          register: hetzner_jobs
+          until: hetzner_jobs.finished
+          retries: 300
+          with_items: "{{ server.results }}"
+
+        - name: Destroy volume(s)
+          hetzner.hcloud.volume:
+            name: "{{ item.1.name | default(item.0.name) }}"
+            server: "{{ item.0.name }}"
+            api_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
+            state: absent
+          register: volumes
+          loop: "{{ molecule_yml.platforms | subelements('volumes', skip_missing=True) }}"
+          async: 7200
+          poll: 0
+
+        - name: Wait for volume(s) deletion to complete
+          when: volumes.changed
+          ansible.builtin.async_status:
+            jid: "{{ item.ansible_job_id }}"
+          register: hetzner_volumes
+          until: hetzner_volumes.finished
+          retries: 300
+          with_items: "{{ volumes.results }}"
+
+        - name: Destroy network(s)
+          when: ansible_loop.first
+          hetzner.hcloud.network:
+            name: "{{ item.network[0].name }}"
+            api_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
+            state: absent
+          register: networks
+          loop: "{{ molecule_yml.platforms }}"
+          loop_control:
+            extended: yes
+
+    - name: Stop Hcloud Server
+      when:
+        - hetzner_server_state != 'absent'
+        - hcloud_server_info_output is defined
+        - hcloud_server_info_output.results is defined
+        - hcloud_server_info_output.results[0].hcloud_server_info[0].id is defined
+      block:
+        - name: "Trigger molecule instance(s) desired state {{ hetzner_server_state }}"
+          hetzner.hcloud.server:
+            name: "{{ item.name }}"
+            api_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
+            state: "{{ hetzner_server_state }}"
+          register: server
+          with_items: "{{ molecule_yml.platforms }}"
+          async: 7200
+          poll: 0
+
+        - name: "Wait for instance(s) to be in state {{ hetzner_server_state }}"
+          ansible.builtin.async_status:
+            jid: "{{ item.ansible_job_id }}"
+          register: hetzner_jobs
+          until: hetzner_jobs.finished
+          retries: 300
+          with_items: "{{ server.results }}"
+
+
+    - name: Remove registered SSH key
+      hetzner.hcloud.ssh_key:
+        name: "{{ instance_conf[0].ssh_key_name }}"
+        api_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
+        state: absent
+      when:
+        - not id_ed25519_stat.stat.exists
+        - not skip_instances
+        - not hcloud_ssh_key.name == 'michael@eifel'
+        - not hcloud_ssh_key.name == 'molecule'
+        - instance_conf | length  # must contain at least one instance
+
+    - name: Populate instance config
+      ansible.builtin.set_fact:
+        instance_conf: {}
+
+    - name: Dump instance config
+      ansible.builtin.copy:
+        content: |
+          # Molecule managed
+
+          {{ instance_conf | to_json | from_json | to_yaml }}
+        dest: "{{ molecule_instance_config }}"
+      when: server.changed | bool

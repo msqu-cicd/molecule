@@ -1,0 +1,36 @@
+---
+dependency:
+  name: galaxy
+driver:
+   name: default
+platforms:
+  - name: molecule-${CI_PROJECT_NAME_MOLECULE}
+    os: "${MOLECULE_DISTRO}"
+    plan:  ${INSTANCE_SIZE:-vc2-1c-1gb}
+    region: ${INSTANCE_REGION:-fra}
+    groups:
+      - master
+    vpc_cidr: ${INSTANCE_VPC_CIDR:-"172.16.0.0/24"}
+provisioner:
+  name: ansible
+  config_options:
+    defaults:
+      bin_ansible_callbacks: yes
+      callbacks_enabled: timer, profile_tasks, yaml
+      display_failed_stderr: true
+      host_key_checking: false
+      remote_tmp: '/tmp/.ansible-${USER}/tmp'
+      stdout_callback: yaml
+      vault_password_file: ${CI_PROJECT_DIR}/.vault
+    diff:
+      always: true
+    callback_profile_tasks:
+      task_output_limit: all
+  playbooks:
+    prepare: ${MOLECULE_PLAYBOOK_PREPARE:-prepare.yml}
+    cleanup: ${MOLECULE_PLAYBOOK_CLEANUP:-cleanup.yml}
+    converge: ${MOLECULE_PLAYBOOK_CONVERGE:-converge.yml}
+    destroy: ${MOLECULE_PLAYBOOK_DESTROY:-destroy.yml}
+  log: True
+verifier:
+  name: ansible

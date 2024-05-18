@@ -49,7 +49,7 @@ runs:
       uses: https://github.com/actions/checkout@v4
       with:
         github-server-url: 'https://gitea.msqu.de'
-        repository: infrastructure/molecule
+        repository: cicd/molecule
         token: ${{ inputs.token }}
         path: 'git_molecule'
         ref: 'main'
@@ -91,7 +91,7 @@ runs:
     - name: Prepare Molecule Scenario
       run: |
         mkdir -p ${GITHUB_WORKSPACE}/molecule/default
-        rsync -avzh --ignore-existing --ignore-errors git_molecule/${{ inputs.molecule_scenario }}/ ${GITHUB_WORKSPACE}/molecule/default/
+        rsync -avzh --ignore-existing --ignore-errors git_molecule/scenarios/${{ inputs.molecule_scenario }}/ ${GITHUB_WORKSPACE}/molecule/default/
       shell: bash
 
     - name: Sync vars
