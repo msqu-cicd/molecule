@@ -1,0 +1,93 @@
+name: Docker Build and Push
+on:
+  issue_comment:
+  workflow_dispatch:
+  pull_request:
+  push:
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: focal
+            dockerfile: Ubuntu
+            image: 20.04
+            build-args: "OS_VERSION=20.04"
+          - name: jammy
+            dockerfile: Ubuntu
+            image: 22.04
+            build-args: "OS_VERSION=22.04"
+          - name: noble
+            dockerfile: Ubuntu
+            image: 24.04
+            build-args: "OS_VERSION=24.04"
+          - name: bookworm
+            dockerfile: Debian
+            image: 12
+            build-args: "OS_VERSION=12"
+          - name: lint
+            dockerfile: Lint
+            image: lint
+            build-args: "ANSIBLE_LINT_VERSION=latest"
+          - name: Ansible
+            dockerfile: Ansible
+            image: ansible
+            build-args: "FROM=python:3-alpine"
+          - name: DinD
+            dockerfile: DinD
+            image: dind
+            build-args: "FROM=docker:dind"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: set up qemu
+        uses: docker/setup-qemu-action@v3
+
+      - name: set up docker buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Gitea
+        uses: docker/login-action@v3
+        with:
+          registry: gitea.msqu.de
+          username: ${{ secrets.GITEA_USERNAME }}
+          password: ${{ secrets.GITEA_TOKEN }}
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: schmitzis
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Login to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ghcr.io/${{ github.repository }}
+            gitea.msqu.de/devops/${{ github.event.repository.name }}
+            schmitzis/${{ github.event.repository.name }}
+
+      - name: Build and push
+        id: docker_build
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ github.workspace }}/dockerfiles
+          file: ${{ github.workspace }}/dockerfiles/${{ matrix.dockerfile }}
+          build-args: ${{ matrix.build-args }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ matrix.image }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64,linux/arm64

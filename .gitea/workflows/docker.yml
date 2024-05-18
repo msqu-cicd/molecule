@@ -1,126 +1,126 @@
----
-name: Docker Build and Push
-on:
-  issue_comment:
-  workflow_dispatch:
-  pull_request:
-  push:
+# ---
+# name: Docker Build and Push
+# on:
+#   issue_comment:
+#   workflow_dispatch:
+#   pull_request:
+#   push:
 
-jobs:
-  docker_image:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: https://github.com/actions/checkout@v4
+# jobs:
+#   docker_image:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Checkout
+#         uses: https://github.com/actions/checkout@v4
 
-      # - id: information
-      #   uses: https://gitea.dhswt.de/actions/information@master
+#       # - id: information
+#       #   uses: https://gitea.dhswt.de/actions/information@master
 
-      - name: Set up QEMU
-        uses: https://github.com/docker/setup-qemu-action@v3
-        with:
-          platforms: amd64,arm64
+#       - name: Set up QEMU
+#         uses: https://github.com/docker/setup-qemu-action@v3
+#         with:
+#           platforms: amd64,arm64
 
-      - name: Set up Docker Buildx
-        uses: https://github.com/docker/setup-buildx-action@v3
+#       - name: Set up Docker Buildx
+#         uses: https://github.com/docker/setup-buildx-action@v3
 
-      - name: Build and push Docker image Ubuntu Focal
-        if: success() || failure()
-        uses: https://gitea.msqu.de/cicd/docker@master
-        #uses: https://gitea.dhswt.de/actions/docker@master
-        with:
-          docker_context_dir: ${{ github.workspace }}/dockerfiles
-          dockerfile: ${{ github.workspace }}/dockerfiles/Ubuntu
-          build_args: "OS_VERSION=20.04"
-          additional_registries: docker.io/schmitzis/molecule
-          tags_additional: 20.04
-          tag_commit_enable: false
-          tag_semver_enable: false
-          tag_ref_normalized_enable: false
-          registry_auth_json: ${{ secrets.DOCKER_HUB_AUTH_SCHMITZIS }}
-          docker_multiarch: true
-          ci_registry_password: ${{ secrets.ACT_RUNNER_PAT }}
+#       - name: Build and push Docker image Ubuntu Focal
+#         if: success() || failure()
+#         uses: https://gitea.msqu.de/cicd/docker@master
+#         #uses: https://gitea.dhswt.de/actions/docker@master
+#         with:
+#           docker_context_dir: ${{ github.workspace }}/dockerfiles
+#           dockerfile: ${{ github.workspace }}/dockerfiles/Ubuntu
+#           build_args: "OS_VERSION=20.04"
+#           additional_registries: docker.io/schmitzis/molecule
+#           tags_additional: 20.04
+#           tag_commit_enable: false
+#           tag_semver_enable: false
+#           tag_ref_normalized_enable: false
+#           registry_auth_json: ${{ secrets.DOCKER_HUB_AUTH_SCHMITZIS }}
+#           docker_multiarch: true
+#           ci_registry_password: ${{ secrets.ACT_RUNNER_PAT }}
 
-      - name: Build and push Docker image Ubuntu Jammy
-        if: success() || failure()
-        uses: https://gitea.msqu.de/cicd/docker@master
-        #uses: https://gitea.dhswt.de/actions/docker@master
-        with:
-          docker_context_dir: ${{ github.workspace }}/dockerfiles
-          dockerfile: ${{ github.workspace }}/dockerfiles/Ubuntu
-          build_args: "OS_VERSION=22.04"
-          additional_registries: docker.io/schmitzis/molecule
-          tags_additional: 22.04
-          tag_commit_enable: false
-          tag_semver_enable: false
-          tag_ref_normalized_enable: false
-          registry_auth_json: ${{ secrets.DOCKER_HUB_AUTH_SCHMITZIS }}
-          docker_multiarch: true
-          ci_registry_password: ${{ secrets.ACT_RUNNER_PAT }}
+#       - name: Build and push Docker image Ubuntu Jammy
+#         if: success() || failure()
+#         uses: https://gitea.msqu.de/cicd/docker@master
+#         #uses: https://gitea.dhswt.de/actions/docker@master
+#         with:
+#           docker_context_dir: ${{ github.workspace }}/dockerfiles
+#           dockerfile: ${{ github.workspace }}/dockerfiles/Ubuntu
+#           build_args: "OS_VERSION=22.04"
+#           additional_registries: docker.io/schmitzis/molecule
+#           tags_additional: 22.04
+#           tag_commit_enable: false
+#           tag_semver_enable: false
+#           tag_ref_normalized_enable: false
+#           registry_auth_json: ${{ secrets.DOCKER_HUB_AUTH_SCHMITZIS }}
+#           docker_multiarch: true
+#           ci_registry_password: ${{ secrets.ACT_RUNNER_PAT }}
 
-      - name: Build and push Docker image Debian Bookworm
-        if: success() || failure()
-        uses: https://gitea.msqu.de/cicd/docker@master
-        #uses: https://gitea.dhswt.de/actions/docker@master
-        with:
-          docker_context_dir: ${{ github.workspace }}/dockerfiles
-          dockerfile: ${{ github.workspace }}/dockerfiles/Debian
-          build_args: "OS_VERSION=12"
-          additional_registries: docker.io/schmitzis/molecule
-          tags_additional: 12
-          tag_commit_enable: false
-          tag_semver_enable: false
-          tag_ref_normalized_enable: false
-          registry_auth_json: ${{ secrets.DOCKER_HUB_AUTH_SCHMITZIS }}
-          docker_multiarch: true
-          ci_registry_password: ${{ secrets.ACT_RUNNER_PAT }}
+#       - name: Build and push Docker image Debian Bookworm
+#         if: success() || failure()
+#         uses: https://gitea.msqu.de/cicd/docker@master
+#         #uses: https://gitea.dhswt.de/actions/docker@master
+#         with:
+#           docker_context_dir: ${{ github.workspace }}/dockerfiles
+#           dockerfile: ${{ github.workspace }}/dockerfiles/Debian
+#           build_args: "OS_VERSION=12"
+#           additional_registries: docker.io/schmitzis/molecule
+#           tags_additional: 12
+#           tag_commit_enable: false
+#           tag_semver_enable: false
+#           tag_ref_normalized_enable: false
+#           registry_auth_json: ${{ secrets.DOCKER_HUB_AUTH_SCHMITZIS }}
+#           docker_multiarch: true
+#           ci_registry_password: ${{ secrets.ACT_RUNNER_PAT }}
 
-      - name: Build and push Docker image Lint
-        uses: https://gitea.msqu.de/cicd/docker@master
-        #uses: https://gitea.dhswt.de/actions/docker@master
-        with:
-          docker_context_dir: ${{ github.workspace }}/dockerfiles
-          dockerfile: ${{ github.workspace }}/dockerfiles/Lint
-          build_args: "ANSIBLE_LINT_VERSION=latest"
-          additional_registries: docker.io/schmitzis/molecule
-          tags_additional: lint
-          tag_commit_enable: false
-          tag_semver_enable: false
-          tag_ref_normalized_enable: false
-          registry_auth_json: ${{ secrets.DOCKER_HUB_AUTH_SCHMITZIS }}
-          docker_multiarch: true
-          ci_registry_password: ${{ secrets.ACT_RUNNER_PAT }}
+#       - name: Build and push Docker image Lint
+#         uses: https://gitea.msqu.de/cicd/docker@master
+#         #uses: https://gitea.dhswt.de/actions/docker@master
+#         with:
+#           docker_context_dir: ${{ github.workspace }}/dockerfiles
+#           dockerfile: ${{ github.workspace }}/dockerfiles/Lint
+#           build_args: "ANSIBLE_LINT_VERSION=latest"
+#           additional_registries: docker.io/schmitzis/molecule
+#           tags_additional: lint
+#           tag_commit_enable: false
+#           tag_semver_enable: false
+#           tag_ref_normalized_enable: false
+#           registry_auth_json: ${{ secrets.DOCKER_HUB_AUTH_SCHMITZIS }}
+#           docker_multiarch: true
+#           ci_registry_password: ${{ secrets.ACT_RUNNER_PAT }}
 
-      - name: Build and push Docker image Ansible
-        if: success() || failure()
-        uses: https://gitea.msqu.de/cicd/docker@master
-        #uses: https://gitea.dhswt.de/actions/docker@master
-        with:
-          docker_context_dir: ${{ github.workspace }}/dockerfiles
-          dockerfile: ${{ github.workspace }}/dockerfiles/Ansible
-          build_args: "FROM=python:3-alpine"
-          additional_registries: docker.io/schmitzis/molecule
-          tags_additional: ansible
-          tag_commit_enable: false
-          tag_semver_enable: false
-          tag_ref_normalized_enable: false
-          registry_auth_json: ${{ secrets.DOCKER_HUB_AUTH_SCHMITZIS }}
-          docker_multiarch: true
-          ci_registry_password: ${{ secrets.ACT_RUNNER_PAT }}
+#       - name: Build and push Docker image Ansible
+#         if: success() || failure()
+#         uses: https://gitea.msqu.de/cicd/docker@master
+#         #uses: https://gitea.dhswt.de/actions/docker@master
+#         with:
+#           docker_context_dir: ${{ github.workspace }}/dockerfiles
+#           dockerfile: ${{ github.workspace }}/dockerfiles/Ansible
+#           build_args: "FROM=python:3-alpine"
+#           additional_registries: docker.io/schmitzis/molecule
+#           tags_additional: ansible
+#           tag_commit_enable: false
+#           tag_semver_enable: false
+#           tag_ref_normalized_enable: false
+#           registry_auth_json: ${{ secrets.DOCKER_HUB_AUTH_SCHMITZIS }}
+#           docker_multiarch: true
+#           ci_registry_password: ${{ secrets.ACT_RUNNER_PAT }}
 
-      - name: Build and push Docker image DinD
-        if: success() || failure()
-        uses: https://gitea.msqu.de/cicd/docker@master
-        #uses: https://gitea.dhswt.de/actions/docker@master
-        with:
-          docker_context_dir: ${{ github.workspace }}/dockerfiles
-          dockerfile: ${{ github.workspace }}/dockerfiles/DinD
-          build_args: "FROM=docker:dind"
-          additional_registries: docker.io/schmitzis/molecule
-          tags_additional: dind
-          tag_commit_enable: false
-          tag_semver_enable: false
-          tag_ref_normalized_enable: false
-          registry_auth_json: ${{ secrets.DOCKER_HUB_AUTH_SCHMITZIS }}
-          docker_multiarch: true
-          ci_registry_password: ${{ secrets.ACT_RUNNER_PAT }}
+#       - name: Build and push Docker image DinD
+#         if: success() || failure()
+#         uses: https://gitea.msqu.de/cicd/docker@master
+#         #uses: https://gitea.dhswt.de/actions/docker@master
+#         with:
+#           docker_context_dir: ${{ github.workspace }}/dockerfiles
+#           dockerfile: ${{ github.workspace }}/dockerfiles/DinD
+#           build_args: "FROM=docker:dind"
+#           additional_registries: docker.io/schmitzis/molecule
+#           tags_additional: dind
+#           tag_commit_enable: false
+#           tag_semver_enable: false
+#           tag_ref_normalized_enable: false
+#           registry_auth_json: ${{ secrets.DOCKER_HUB_AUTH_SCHMITZIS }}
+#           docker_multiarch: true
+#           ci_registry_password: ${{ secrets.ACT_RUNNER_PAT }}
