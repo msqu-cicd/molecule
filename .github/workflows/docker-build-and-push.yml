@@ -76,9 +76,11 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            ghcr.io/${{ github.repository }}
-            gitea.msqu.de/devops/${{ github.event.repository.name }}
             schmitzis/${{ github.event.repository.name }}
+          tags: |
+            type=raw,value=${{ matrix.image }}
+
+#gitea.msqu.de/devops/${{ github.event.repository.name }}
 
       - name: Build and push
         id: docker_build
@@ -88,6 +90,6 @@ jobs:
           file: ${{ github.workspace }}/dockerfiles/${{ matrix.dockerfile }}
           build-args: ${{ matrix.build-args }}
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ matrix.image }}
+          tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           platforms: linux/amd64,linux/arm64
