@@ -5,7 +5,7 @@ driver:
   name: default
 platforms:
   - name: molecule-${CI_PROJECT_NAME_MOLECULE}
-    server_type: ${INSTANCE_SIZE:-cpx11}
+    server_type: ${INSTANCE_SIZE:-cax11}
     image: ${MOLECULE_DISTRO}
     location: ${INSTANCE_REGION:-fsn1}
     groups:
