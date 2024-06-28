@@ -45,6 +45,11 @@ runs:
       run: apt-get update -qq -o=Dpkg::Use-Pty=0 && apt-get -qq -o Dpkg::Use-Pty=0 install rsync
       shell: bash
 
+    - name: Extract branch name
+      shell: bash
+      run: echo "branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
+      id: extract_branch
+
     - name: Check out the molecule repository
       uses: https://github.com/actions/checkout@v4
       with:
@@ -52,7 +57,7 @@ runs:
         repository: cicd/molecule
         token: ${{ inputs.token }}
         path: 'git_molecule'
-        ref: 'main'
+        ref: ${{ steps.extract_branch.outputs.branch }}
         show-progress: 'false'
 
     - name: Check out the infra repository
