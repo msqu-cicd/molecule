@@ -45,30 +45,23 @@ runs:
       run: apt-get update -qq -o=Dpkg::Use-Pty=0 && apt-get -qq -o Dpkg::Use-Pty=0 install rsync
       shell: bash
 
-    - name: Extract branch name
-      shell: bash
-      run: echo "branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
-      id: extract_branch
-
     - name: Check out the molecule repository
       uses: https://github.com/actions/checkout@v4
       with:
-        github-server-url: 'https://gitea.msqu.de'
         repository: cicd/molecule
         token: ${{ inputs.token }}
         path: 'git_molecule'
-        ref: ${{ steps.extract_branch.outputs.branch }}
-        show-progress: 'false'
+        ref: 'main'
+        fetch-depth: 0
 
     - name: Check out the infra repository
       uses: https://github.com/actions/checkout@v4
       with:
-        github-server-url: 'https://gitea.msqu.de'
         repository: infrastructure/infra
         token: ${{ inputs.token }}
         path: 'git_infra'
         ref: 'main'
-        show-progress: 'false'
+        fetch-depth: 0
         sparse-checkout: |
           requirements
           group_vars
