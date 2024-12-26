@@ -33,9 +33,12 @@
       tags:
         - molecule-idempotence-notest
 
-    - name: Set ansible_user
+    - name: Set facts
       ansible.builtin.set_fact:
         ansible_user: "{{ ansible_env.USER }}"
+        interface_main_ipv4: "{{ ansible_default_ipv4.address }}"
+        interface_main_ipv6: "{{ ansible_default_ipv6.address }}"
+        ipv6_enabled: "{% if lookup('ansible.builtin.file', '/proc/net/if_inet6' , errors='warn') %}true{% else %}false{% endif %}"
 
     - name: Check cloud-init status
       ansible.builtin.shell: systemctl is-active cloud-init.service || systemctl is-enabled cloud-init.service
