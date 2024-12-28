@@ -4,6 +4,9 @@ description: Run Ansible Molecule
 author: Michael Schmitz
 
 inputs:
+  args:
+    description: 'Additional arguments passed to molecule test'
+    default: ''
   ansible_version:
     description: Ansible version to use, leave empty for newest
     default: ''
@@ -136,7 +139,7 @@ runs:
         detached: true
 
     - name: Run Molecule tests
-      run: molecule test
+      run: molecule test ${{ inputs.args }}
       shell: bash
       env:
         ANSIBLE_FORCE_COLOR: '1'

@@ -120,7 +120,6 @@
           retries: 300
           with_items: "{{ server.results }}"
 
-
     - name: Remove registered SSH key
       hetzner.hcloud.ssh_key:
         name: "{{ instance_conf[0].ssh_key_name }}"
