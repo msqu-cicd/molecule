@@ -48,6 +48,11 @@ runs:
       run: apt-get update -qq -o=Dpkg::Use-Pty=0 && apt-get -qq -o Dpkg::Use-Pty=0 install rsync
       shell: bash
 
+    - name: Setup Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
     - name: Check out the molecule repository
       uses: https://github.com/actions/checkout@v4
       with:
