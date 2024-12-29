@@ -109,8 +109,8 @@ runs:
         if [ -f "${GITHUB_WORKSPACE}/requirements.yml" ]; then sed -i "s,ssh://git@gitea.msqu.de:22222/.*/,https://${{ inputs.token }}@github.com/${GITHUB_REPOSITORY_OWNER}/,g" ${GITHUB_WORKSPACE}/requirements.yml; fi
       shell: bash
 
-    - name: Install software for generic use case
-      run: pip install 'ansible-core${{ inputs.ansible_version }}' 'molecule${{ inputs.molecule_version }}' netaddr jmespath dnspython python-dateutil Jinja2 requests --quiet
+    - name: Install software via pip
+      run: pip install 'ansible-core${{ inputs.ansible_version }}' 'molecule${{ inputs.molecule_version }}' netaddr jmespath dnspython python-dateutil Jinja2 requests --break-system-packages --quiet
       shell: bash
 
     - name: Pip list
