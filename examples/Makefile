@@ -1,7 +1,7 @@
 SHELL:=/bin/bash
 
-MOLECULE_GIT_REPO='ssh://git@gitea.msqu.de:22222/ansible/molecule.git'
-MOLECULE_LINT_IMAGE='gitea.msqu.de/devops/molecule:lint'
+MOLECULE_GIT_REPO='ssh://git@git.msqu.de:22222/ansible/molecule.git'
+MOLECULE_LINT_IMAGE='git.msqu.de/devops/molecule:lint'
 ANSIBLE_VAULT_PASSWORD_FILE_LOCATION := ~/.secrets/ansible-vault-pass
 HCLOUD_TOKEN := $(shell cat ~/.secrets/hcloud)
 CONTAINER_RUNTIME ?= $(if $(shell command -v podman ;),podman,docker)

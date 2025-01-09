@@ -56,7 +56,7 @@ runs:
     - name: Check out the molecule repository
       uses: https://github.com/actions/checkout@v4
       with:
-        github-server-url: https://gitea.msqu.de
+        github-server-url: https://git.msqu.de
         repository: cicd/molecule
         token: ${{ inputs.token }}
         path: 'git_molecule'
@@ -66,7 +66,7 @@ runs:
     - name: Check out the infra repository
       uses: https://github.com/actions/checkout@v4
       with:
-        github-server-url: https://gitea.msqu.de
+        github-server-url: https://git.msqu.de
         repository: infrastructure/infra
         token: ${{ inputs.token }}
         path: 'git_infra'
@@ -113,7 +113,7 @@ runs:
 
     - name: Update requirements.yml
       run: |
-        if [ -f "${GITHUB_WORKSPACE}/requirements.yml" ]; then sed -i "s,ssh://git@gitea.msqu.de:22222/.*/,https://${{ inputs.token }}@github.com/${GITHUB_REPOSITORY_OWNER}/,g" ${GITHUB_WORKSPACE}/requirements.yml; fi
+        if [ -f "${GITHUB_WORKSPACE}/requirements.yml" ]; then sed -i "s,ssh://git@git.msqu.de:22222/.*/,https://${{ inputs.token }}@github.com/${GITHUB_REPOSITORY_OWNER}/,g" ${GITHUB_WORKSPACE}/requirements.yml; fi
       shell: bash
 
     - name: Install software via pip
