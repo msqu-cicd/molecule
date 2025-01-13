@@ -52,17 +52,14 @@ runs:
         rsync -avzh --ignore-existing --ignore-errors git_molecule/scenarios/${{ inputs.molecule_scenario }}/ ${GITHUB_WORKSPACE}/molecule/default/
       shell: bash
 
-    - name: Prepare Unit variables
-      if: ${{ hashFiles('tests/vars.yml') != '' }} && ${{ inputs.test_type == 'unit' }}
-      shell: bash
+    - name: Sync vars
       run: |
-        mkdir -p ${GITHUB_WORKSPACE}/molecule/default/group_vars/all/ && rsync -aP ${GITHUB_WORKSPACE}/tests/vars.yml ${GITHUB_WORKSPACE}/molecule/default/group_vars/all/test_vars.yml
-
-    - name: Prepare Integration variables
-      if: ${{ inputs.test_type == 'integration' }}
+        if [[ "${{ inputs.test_type }}" == "unit" ]] && [[ -f "${GITHUB_WORKSPACE}/tests/vars.yml" ]]; then
+          mkdir -p ${GITHUB_WORKSPACE}/molecule/default/group_vars/all/ && rsync -aP ${GITHUB_WORKSPACE}/tests/vars.yml ${GITHUB_WORKSPACE}/molecule/default/group_vars/all/test_vars.yml
+        elif [[ "${{ inputs.test_type }}" == "integration" ]]; then
+          rsync -aP git_infra/group_vars ${GITHUB_WORKSPACE}/molecule/default/
+        fi
       shell: bash
-      run: |
-        rsync -aP git_infra/group_vars ${GITHUB_WORKSPACE}/molecule/default/
 
     - name: Run Molecule tests
       run: molecule test ${{ inputs.args }}

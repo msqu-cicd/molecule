@@ -84,21 +84,6 @@ runs:
         eval "$(ssh-agent -s)" && echo "${{ inputs.ssh_key }}" | tr -d '\r' | ssh-add - >/dev/null
       shell: bash
 
-    - name: Prepare Molecule Scenario
-      run: |
-        mkdir -p ${GITHUB_WORKSPACE}/molecule/default
-        rsync -avzh --ignore-existing --ignore-errors git_molecule/scenarios/${{ inputs.molecule_scenario }}/ ${GITHUB_WORKSPACE}/molecule/default/
-      shell: bash
-
-    - name: Sync vars
-      run: |
-        if [[ "${{ inputs.test_type }}" == "unit" ]] && [[ -f "${GITHUB_WORKSPACE}/tests/vars.yml" ]]; then
-          mkdir -p ${GITHUB_WORKSPACE}/molecule/default/group_vars/all/ && rsync -aP ${GITHUB_WORKSPACE}/tests/vars.yml ${GITHUB_WORKSPACE}/molecule/default/group_vars/all/test_vars.yml
-        elif [[ "${{ inputs.test_type }}" == "integration" ]]; then
-          rsync -aP git_infra/group_vars ${GITHUB_WORKSPACE}/molecule/default/
-        fi
-      shell: bash
-
     - name: Install software via pip
       run: pip install 'ansible-core${{ inputs.ansible_version }}' 'molecule${{ inputs.molecule_version }}' netaddr jmespath dnspython python-dateutil Jinja2 requests --break-system-packages --quiet
       shell: bash
