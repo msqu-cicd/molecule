@@ -46,6 +46,31 @@ runs:
       env:
         MOLECULE_DISTRO: "${{ inputs.distro }}"
 
+    - name: Check out the molecule repository
+      uses: https://github.com/actions/checkout@v4
+      with:
+        github-server-url: https://git.msqu.de
+        repository: cicd/molecule
+        token: ${{ inputs.token }}
+        path: 'git_molecule'
+        ref: 'main'
+        fetch-depth: 0
+        sparse-checkout: |
+          scenarios/${{ inputs.molecule_scenario }}
+
+    - name: Check out the infra repository
+      uses: https://github.com/actions/checkout@v4
+      with:
+        github-server-url: https://git.msqu.de
+        repository: infrastructure/infra
+        token: ${{ inputs.token }}
+        path: 'git_infra'
+        ref: 'main'
+        fetch-depth: 0
+        sparse-checkout: |
+          requirements
+          group_vars
+
     - name: Prepare Molecule Scenario
       run: |
         mkdir -p ${GITHUB_WORKSPACE}/molecule/default

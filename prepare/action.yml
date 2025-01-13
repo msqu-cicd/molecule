@@ -35,29 +35,6 @@ runs:
       with:
         python-version: '3.12'
 
-    - name: Check out the molecule repository
-      uses: https://github.com/actions/checkout@v4
-      with:
-        github-server-url: https://git.msqu.de
-        repository: cicd/molecule
-        token: ${{ inputs.token }}
-        path: 'git_molecule'
-        ref: 'main'
-        fetch-depth: 0
-
-    - name: Check out the infra repository
-      uses: https://github.com/actions/checkout@v4
-      with:
-        github-server-url: https://git.msqu.de
-        repository: infrastructure/infra
-        token: ${{ inputs.token }}
-        path: 'git_infra'
-        ref: 'main'
-        fetch-depth: 0
-        sparse-checkout: |
-          requirements
-          group_vars
-
     - name: Prepare Ansible Vault
       run: echo "${{ inputs.ansible_vault_password }}" > "$GITHUB_WORKSPACE/.vault"
       shell: bash
