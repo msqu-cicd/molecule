@@ -1,0 +1,82 @@
+---
+name: Ansible Molecule
+description: Run Ansible Molecule
+author: Michael Schmitz
+
+inputs:
+  args:
+    description: 'Additional arguments passed to molecule test'
+    default: ''
+  distro:
+    description: 'Execute tests against distribution'
+    default: 'debian-12'
+  hcloud_token:
+    description: 'Hetzner API Token'
+    default: ''
+  hcloud_server_state:
+    description: 'Server State after Molecule run'
+    default: 'absent'
+  molecule_debug:
+    description: Whether to tell the GitHub client to log details of its requests
+    default: ${{ (env.RUNNER_DEBUG == '1' && 'true') || 'false' }}
+  molecule_scenario:
+    description: Molecule scenario for testing
+    default: 'hetznercloud'
+  molecule_version:
+    description: Molecule version to use, leave empty for newest
+    default: ''
+  ssh_key:
+    description: 'SSH Key to use'
+    default: ''
+  test_type:
+    description: 'Choose between: unit|integration'
+    default: 'unit'
+  token:
+    description: 'Gitea Runner token'
+    default: 'unit'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set CI_HOSTNAME / CI_PROJECT_NAME_MOLECULE
+      run: |
+        echo "CI_HOSTNAME=$(echo $MOLECULE_DISTRO | tr -dc '[:alnum:]\n\r' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+        echo "CI_PROJECT_NAME_MOLECULE=$(echo ${GITHUB_REPOSITORY#*/} | tr '_' '-')" >> $GITHUB_ENV
+      shell: bash
+      env:
+        MOLECULE_DISTRO: "${{ inputs.distro }}"
+
+    - name: Prepare Molecule Scenario
+      run: |
+        mkdir -p ${GITHUB_WORKSPACE}/molecule/default
+        rsync -avzh --ignore-existing --ignore-errors git_molecule/scenarios/${{ inputs.molecule_scenario }}/ ${GITHUB_WORKSPACE}/molecule/default/
+      shell: bash
+
+    - name: Prepare Unit variables
+      if: ${{ hashFiles('tests/vars.yml') != '' }} && ${{ inputs.test_type == 'unit' }}
+      shell: bash
+      run: |
+        mkdir -p ${GITHUB_WORKSPACE}/molecule/default/group_vars/all/ && rsync -aP ${GITHUB_WORKSPACE}/tests/vars.yml ${GITHUB_WORKSPACE}/molecule/default/group_vars/all/test_vars.yml
+
+    - name: Prepare Integration variables
+      if: ${{ inputs.test_type == 'integration' }}
+      shell: bash
+      run: |
+        rsync -aP git_infra/group_vars ${GITHUB_WORKSPACE}/molecule/default/
+
+    - name: Run Molecule tests
+      run: molecule test ${{ inputs.args }}
+      shell: bash
+      env:
+        ANSIBLE_FORCE_COLOR: '1'
+        ANSIBLE_VERBOSITY: '2'
+        CI_JOB_ID: "${{ github.run_id }}"
+        CI_PROJECT_DIR: "$GITHUB_WORKSPACE"
+        GITEA_TOKEN: "${{ inputs.token }}"
+        HCLOUD_SERVER_STATE: "${{ inputs.hcloud_server_state }}"
+        HCLOUD_TOKEN: "${{ inputs.hcloud_token }}"
+        MOLECULE_DEBUG: "${{ inputs.molecule_debug }}"
+        MOLECULE_DISTRO: "${{ inputs.distro }}"
+        MOLECULE_SCENARIO_NAME: "${{ inputs.molecule_scenario }}"
+        PY_COLORS: '1'
+        TEST_TYPE: "${{ inputs.test_type }}"

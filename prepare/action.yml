@@ -1,12 +1,9 @@
 ---
-name: Ansible Molecule
-description: Run Ansible Molecule
+name: Ansible Molecule Preparations
+description: Run Ansible Molecule Preparations
 author: Michael Schmitz
 
 inputs:
-  args:
-    description: 'Additional arguments passed to molecule test'
-    default: ''
   ansible_version:
     description: Ansible version to use, leave empty for newest
     default: ''
@@ -16,15 +13,6 @@ inputs:
   distro:
     description: 'Execute tests against distribution'
     default: 'debian-12'
-  hcloud_token:
-    description: 'Hetzner API Token'
-    default: ''
-  hcloud_server_state:
-    description: 'Server State after Molecule run'
-    default: 'absent'
-  molecule_debug:
-    description: Whether to tell the GitHub client to log details of its requests
-    default: ${{ (env.RUNNER_DEBUG == '1' && 'true') || 'false' }}
   molecule_scenario:
     description: Molecule scenario for testing
     default: 'hetznercloud'
@@ -111,53 +99,10 @@ runs:
         fi
       shell: bash
 
-    - name: Update requirements.yml
-      run: |
-        if [ -f "${GITHUB_WORKSPACE}/requirements.yml" ]; then sed -i "s,ssh://git@git.msqu.de:22222/.*/,https://${{ inputs.token }}@github.com/${GITHUB_REPOSITORY_OWNER}/,g" ${GITHUB_WORKSPACE}/requirements.yml; fi
-      shell: bash
-
     - name: Install software via pip
       run: pip install 'ansible-core${{ inputs.ansible_version }}' 'molecule${{ inputs.molecule_version }}' netaddr jmespath dnspython python-dateutil Jinja2 requests --break-system-packages --quiet
-      shell: bash
-
-    - name: Pip list
-      if: runner.debug == '1'
-      run: pip list
       shell: bash
 
     - name: Install collections from collections.yml
       run: ansible-galaxy install -r git_infra/requirements/collections_git.yml
       shell: bash
-
-    - name: Print molecule version infos
-      if: runner.debug == '1'
-      run: molecule --version
-      shell: bash
-
-    - name: Print installed ansible collections
-      if: runner.debug == '1'
-      run: ansible-galaxy collection list
-      shell: bash
-
-    - name: Setup tmate session
-      if: runner.debug == '1'
-      uses: mxschmitt/action-tmate@v3
-      with:
-        detached: true
-
-    - name: Run Molecule tests
-      run: molecule test ${{ inputs.args }}
-      shell: bash
-      env:
-        ANSIBLE_FORCE_COLOR: '1'
-        ANSIBLE_VERBOSITY: '2'
-        CI_JOB_ID: "${{ github.run_id }}"
-        CI_PROJECT_DIR: "$GITHUB_WORKSPACE"
-        GITEA_TOKEN: "${{ inputs.token }}"
-        HCLOUD_SERVER_STATE: "${{ inputs.hcloud_server_state }}"
-        HCLOUD_TOKEN: "${{ inputs.hcloud_token }}"
-        MOLECULE_DEBUG: "${{ inputs.molecule_debug }}"
-        MOLECULE_DISTRO: "${{ inputs.distro }}"
-        MOLECULE_SCENARIO_NAME: "${{ inputs.molecule_scenario }}"
-        PY_COLORS: '1'
-        TEST_TYPE: "${{ inputs.test_type }}"
