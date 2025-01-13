@@ -10,9 +10,6 @@ inputs:
   ansible_vault_password:
     description: Ansible Vault Password
     default: ''
-  distro:
-    description: 'Execute tests against distribution'
-    default: 'debian-12'
   molecule_scenario:
     description: Molecule scenario for testing
     default: 'hetznercloud'
@@ -22,9 +19,6 @@ inputs:
   ssh_key:
     description: 'SSH Key to use'
     default: ''
-  test_type:
-    description: 'Choose between: unit|integration'
-    default: 'unit'
   token:
     description: 'Gitea Runner token'
     default: 'unit'
@@ -63,14 +57,6 @@ runs:
         sparse-checkout: |
           requirements
           group_vars
-
-    - name: Set CI_HOSTNAME / CI_PROJECT_NAME_MOLECULE
-      run: |
-        echo "CI_HOSTNAME=$(echo $MOLECULE_DISTRO | tr -dc '[:alnum:]\n\r' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
-        echo "CI_PROJECT_NAME_MOLECULE=$(echo ${GITHUB_REPOSITORY#*/} | tr '_' '-')" >> $GITHUB_ENV
-      shell: bash
-      env:
-        MOLECULE_DISTRO: "${{ inputs.distro }}"
 
     - name: Prepare Ansible Vault
       run: echo "${{ inputs.ansible_vault_password }}" > "$GITHUB_WORKSPACE/.vault"
