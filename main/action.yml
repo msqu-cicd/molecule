@@ -4,6 +4,9 @@ description: Run Ansible Molecule
 author: Michael Schmitz
 
 inputs:
+  ansible_vault_password:
+    description: Ansible Vault Password
+    default: ''
   args:
     description: 'Additional arguments passed to molecule test'
     default: ''
@@ -45,6 +48,10 @@ runs:
       shell: bash
       env:
         MOLECULE_DISTRO: "${{ inputs.distro }}"
+
+    - name: Prepare Ansible Vault
+      run: echo "${{ inputs.ansible_vault_password }}" > "$GITHUB_WORKSPACE/.vault"
+      shell: bash
 
     - name: Check out the molecule repository
       uses: https://github.com/actions/checkout@v4

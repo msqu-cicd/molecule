@@ -7,9 +7,6 @@ inputs:
   ansible_version:
     description: Ansible version to use, leave empty for newest
     default: ''
-  ansible_vault_password:
-    description: Ansible Vault Password
-    default: ''
   molecule_scenario:
     description: Molecule scenario for testing
     default: 'hetznercloud'
@@ -34,10 +31,6 @@ runs:
       uses: actions/setup-python@v5
       with:
         python-version: '3.12'
-
-    - name: Prepare Ansible Vault
-      run: echo "${{ inputs.ansible_vault_password }}" > "$GITHUB_WORKSPACE/.vault"
-      shell: bash
 
     - name: Prepare SSH Key
       if: "${{ inputs.ssh_key }} != '' }}"
