@@ -10,9 +10,21 @@ inputs:
   args:
     description: 'Additional arguments passed to molecule test'
     default: ''
+  aws_access_key_id:
+    description: 'Specifies an AWS access key associated with an IAM account'
+    default: ''
+  aws_secret_access_key:
+    description: 'Specifies the secret key associated with the access key. This is essentially the "password" for the access key'
+    default: ''
+  aws_default_region:
+    description: 'identifies the AWS Region whose servers you want to send your requests to by default'
+    default: 'eu-central-1'
   distro:
     description: 'Execute tests against distribution'
     default: 'debian-12'
+  do_api_token:
+    description: 'DigitalOcean PAT'
+    default: ''
   hcloud_token:
     description: 'Hetzner API Token'
     default: ''
@@ -37,6 +49,9 @@ inputs:
   token:
     description: 'Gitea Runner token'
     default: 'unit'
+  vultr_api_key:
+    description: 'Vultr PAT'
+    default: ''
 
 runs:
   using: "composite"
@@ -109,9 +124,9 @@ runs:
         PY_COLORS: '1'
         TEST_TYPE: "${{ inputs.test_type }}"
         # Cloud Provider Credentials
-        AWS_DEFAULT_REGION: "${{ secrets.AWS_DEFAULT_REGION }}"
-        AWS_ACCESS_KEY_ID: "${{ secrets.AWS_ACCESS_KEY_ID }}"
-        AWS_SECRET_ACCESS_KEY: "${{ secrets.AWS_SECRET_ACCESS_KEY }}"
-        DO_API_TOKEN: "${{ secrets.DO_API_TOKEN }}"
-        HCLOUD_TOKEN: "${{ secrets.HCLOUD_TOKEN }}"
-        VULTR_API_KEY: "${{ secrets.VULTR_API_KEY }}"
+        AWS_DEFAULT_REGION: "${{ inputs.AWS_DEFAULT_REGION }}"
+        AWS_ACCESS_KEY_ID: "${{ inputs.AWS_ACCESS_KEY_ID }}"
+        AWS_SECRET_ACCESS_KEY: "${{ inputs.AWS_SECRET_ACCESS_KEY }}"
+        DO_API_TOKEN: "${{ inputs.DO_API_TOKEN }}"
+        HCLOUD_TOKEN: "${{ inputs.HCLOUD_TOKEN }}"
+        VULTR_API_KEY: "${{ inputs.VULTR_API_KEY }}"
