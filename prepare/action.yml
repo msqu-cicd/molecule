@@ -15,7 +15,7 @@ inputs:
     default: ''
   ssh_key:
     description: 'SSH Key to use'
-    default: ''
+    default: '${{ secrets.SSH_PRIVATE_KEY }}'
   token:
     description: 'Gitea Runner token'
     default: 'unit'
