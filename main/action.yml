@@ -6,7 +6,7 @@ author: Michael Schmitz
 inputs:
   ansible_vault_password:
     description: Ansible Vault Password
-    default: ''
+    default: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
   args:
     description: 'Additional arguments passed to molecule test'
     default: ''
@@ -24,7 +24,7 @@ inputs:
     default: ${{ (env.RUNNER_DEBUG == '1' && 'true') || 'false' }}
   molecule_scenario:
     description: Molecule scenario for testing
-    default: 'hetznercloud'
+    default: 'docker'
   molecule_version:
     description: Molecule version to use, leave empty for newest
     default: ''
@@ -103,9 +103,15 @@ runs:
         CI_PROJECT_DIR: "$GITHUB_WORKSPACE"
         GITEA_TOKEN: "${{ inputs.token }}"
         HCLOUD_SERVER_STATE: "${{ inputs.hcloud_server_state }}"
-        HCLOUD_TOKEN: "${{ inputs.hcloud_token }}"
         MOLECULE_DEBUG: "${{ inputs.molecule_debug }}"
         MOLECULE_DISTRO: "${{ inputs.distro }}"
         MOLECULE_SCENARIO_NAME: "${{ inputs.molecule_scenario }}"
         PY_COLORS: '1'
         TEST_TYPE: "${{ inputs.test_type }}"
+        # Cloud Provider Credentials
+        AWS_DEFAULT_REGION: "${{ secrets.AWS_DEFAULT_REGION }}"
+        AWS_ACCESS_KEY_ID: "${{ secrets.AWS_ACCESS_KEY_ID }}"
+        AWS_SECRET_ACCESS_KEY: "${{ secrets.AWS_SECRET_ACCESS_KEY }}"
+        DO_API_TOKEN: "${{ secrets.DO_API_TOKEN }}"
+        HCLOUD_TOKEN: "${{ secrets.HCLOUD_TOKEN }}"
+        VULTR_API_KEY: "${{ secrets.VULTR_API_KEY }}"
