@@ -1,0 +1,60 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "security:openssf-scorecard"
+  ],
+  "configMigration": true,
+  "addLabels": [
+    "renovate",
+    "{{{manager}}}"
+  ],
+  "automergeStrategy": "merge-commit",
+  "packageRules": [
+    {
+      "matchDatasources": [
+        "docker"
+      ],
+      "automerge": true,
+      "matchUpdateTypes": [
+        "digest"
+      ]
+    },
+    {
+      "matchManagers": [
+        "dockerfile"
+      ],
+      "matchUpdateTypes": [
+        "patch"
+      ],
+      "automerge": true
+    },
+    {
+      "matchManagers": [
+        "github-actions"
+      ],
+      "automerge": true,
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "pin",
+        "digest"
+      ]
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "fileMatch": [
+        ".*y[a]?ml$"
+      ],
+      "matchStrings": [
+        "refs/tags/(?<depName>.*)/(?<currentValue>.*)"
+      ],
+      "datasourceTemplate": "github-tags",
+      "depNameTemplate": "<org_name>/{{{depName}}}"
+    }
+  ],
+  "osvVulnerabilityAlerts": true,
+  "dependencyDashboardOSVVulnerabilitySummary": "all"
+}
