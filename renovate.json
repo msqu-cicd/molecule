@@ -45,8 +45,8 @@
   "customManagers": [
     {
       "customType": "regex",
-      "fileMatch": [
-        ".*y[a]?ml$"
+      "managerFilePatterns": [
+        "/.*y[a]?ml$/"
       ],
       "matchStrings": [
         "refs/tags/(?<depName>.*)/(?<currentValue>.*)"
