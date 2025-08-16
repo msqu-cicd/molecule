@@ -15,7 +15,7 @@ inputs:
     default: ''
   ssh_key:
     description: 'SSH Key to use'
-    default: '${{ secrets.SSH_PRIVATE_KEY }}'
+    default: ''   # cannot use secrets here
   token:
     description: 'Gitea Runner token'
     default: 'unit'
@@ -33,9 +33,11 @@ runs:
         python-version: '3.13'
 
     - name: Prepare SSH Key
-      if: "${{ inputs.ssh_key }} != '' }}"
+      if: ${{ inputs.ssh_key != '' }}
       run: |
-        mkdir -p ~/.ssh/ && echo "${{ inputs.ssh_key }}" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+        mkdir -p ~/.ssh/
+        echo "${{ inputs.ssh_key }}" > ~/.ssh/id_ed25519
+        chmod 600 ~/.ssh/id_ed25519
         echo -e "Host *\n StrictHostKeyChecking no\n UserKnownHostsFile=/dev/null\n" > ~/.ssh/config
         eval "$(ssh-agent -s)" && echo "${{ inputs.ssh_key }}" | tr -d '\r' | ssh-add - >/dev/null
       shell: bash
