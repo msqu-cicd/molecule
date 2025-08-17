@@ -1,36 +1,31 @@
----
-name: Ansible Molecule Preparations
-description: Run Ansible Molecule Preparations
+name: Prepare Molecule
+description: Prepare environment for Ansible Molecule testing
 author: Michael Schmitz
 
 inputs:
-  ansible_version:
-    description: Ansible version to use, leave empty for newest
-    default: ''
   molecule_scenario:
     description: Molecule scenario for testing
-    default: 'hetznercloud'
-  molecule_version:
-    description: Molecule version to use, leave empty for newest
-    default: ''
+    default: "hetznercloud"
   ssh_key:
-    description: 'SSH Key to use'
-    default: ''   # cannot use secrets here
+    description: SSH Key content to use (pass as workflow input)
+    default: ''
   token:
-    description: 'Gitea Runner token'
-    default: 'unit'
+    description: Gitea Runner token
+    default: ''
 
 runs:
   using: "composite"
   steps:
     - name: Install rsync
-      run: apt-get update -qq -o=Dpkg::Use-Pty=0 && apt-get -qq -o Dpkg::Use-Pty=0 install rsync
+      run: |
+        apt-get update -qq -o=Dpkg::Use-Pty=0
+        apt-get -qq -o Dpkg::Use-Pty=0 install rsync
       shell: bash
 
-    - name: Setup Python 3.12
-      uses: actions/setup-python@v5
+    - name: Setup Python
+      uses: https://github.com/actions/setup-python@v5
       with:
-        python-version: '3.13'
+        python-version: "3.13"
 
     - name: Prepare SSH Key
       if: ${{ inputs.ssh_key != '' }}
@@ -39,25 +34,26 @@ runs:
         echo "${{ inputs.ssh_key }}" > ~/.ssh/id_ed25519
         chmod 600 ~/.ssh/id_ed25519
         echo -e "Host *\n StrictHostKeyChecking no\n UserKnownHostsFile=/dev/null\n" > ~/.ssh/config
-        eval "$(ssh-agent -s)" && echo "${{ inputs.ssh_key }}" | tr -d '\r' | ssh-add - >/dev/null
+        eval "$(ssh-agent -s)" && ssh-add ~/.ssh/id_ed25519
       shell: bash
 
     - name: Install software via pip
-      run: pip install 'ansible-core${{ inputs.ansible_version }}' 'molecule${{ inputs.molecule_version }}' netaddr jmespath dnspython python-dateutil Jinja2 requests --break-system-packages --quiet
+      run: |
+        pip install ansible-core molecule netaddr jmespath dnspython python-dateutil Jinja2 requests \
+        --break-system-packages --quiet
       shell: bash
 
-    - name: Check out the infra repository requirements/collections_git.yml
-      uses: https://github.com/actions/checkout@v4
+    - name: Checkout infra repository
+      uses: https://github.com/actions/checkout@v5
       with:
         github-server-url: https://git.msqu.de
         repository: infrastructure/infra
-        token: ${{ inputs.token }}
-        path: 'git_infra'
-        ref: 'main'
+        token: '${{ inputs.token }}'
+        path: git_infra
+        ref: main
         fetch-depth: 0
-        sparse-checkout: |
-          requirements/collections_git.yml
+        sparse-checkout: requirements/collections_git.yml
 
-    - name: Install collections from collections.yml
+    - name: Install collections from collections_git.yml
       run: ansible-galaxy install -r git_infra/requirements/collections_git.yml
       shell: bash

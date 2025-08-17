@@ -6,7 +6,7 @@ author: Michael Schmitz
 inputs:
   ansible_vault_password:
     description: Ansible Vault Password
-    default: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
+    default: ''
   args:
     description: 'Additional arguments passed to molecule test'
     default: ''
@@ -14,10 +14,10 @@ inputs:
     description: 'Specifies an AWS access key associated with an IAM account'
     default: ''
   aws_secret_access_key:
-    description: 'Specifies the secret key associated with the access key. This is essentially the "password" for the access key'
+    description: 'Specifies the secret key associated with the access key'
     default: ''
   aws_default_region:
-    description: 'identifies the AWS Region whose servers you want to send your requests to by default'
+    description: 'Default AWS region'
     default: 'eu-central-1'
   distro:
     description: 'Execute tests against distribution'
@@ -32,8 +32,8 @@ inputs:
     description: 'Server State after Molecule run'
     default: 'absent'
   molecule_debug:
-    description: Whether to tell the GitHub client to log details of its requests
-    default: ${{ (env.RUNNER_DEBUG == '1' && 'true') || 'false' }}
+    description: 'Enable debug output'
+    default: 'false'
   molecule_scenario:
     description: Molecule scenario for testing
     default: 'docker'
@@ -47,8 +47,8 @@ inputs:
     description: 'Choose between: unit|integration'
     default: 'unit'
   token:
-    description: 'Gitea Runner token'
-    default: 'unit'
+    description: 'Forgejo Runner token'
+    default: ''
   vultr_api_key:
     description: 'Vultr PAT'
     default: ''
@@ -65,13 +65,23 @@ runs:
         MOLECULE_DISTRO: "${{ inputs.distro }}"
 
     - name: Prepare Ansible Vault
-      run: echo "${{ inputs.ansible_vault_password }}" > "$GITHUB_WORKSPACE/.vault"
+      run: |
+        echo "${{ inputs.ansible_vault_password }}" > "$GITHUB_WORKSPACE/.vault"
+        echo "ANSIBLE_VAULT_PASSWORD_FILE=$GITHUB_WORKSPACE/.vault" >> $GITHUB_ENV
+      shell: bash
+
+    - name: Install Molecule
+      run: |
+        if [ -n "${{ inputs.molecule_version }}" ]; then
+          pip install "molecule==${{ inputs.molecule_version }}"
+        else
+          pip install molecule
+        fi
       shell: bash
 
     - name: Check out the molecule repository
-      uses: https://github.com/actions/checkout@v4
+      uses: https://github.com/actions/checkout@v5
       with:
-        github-server-url: https://git.msqu.de
         repository: cicd/molecule
         token: ${{ inputs.token }}
         path: 'git_molecule'
@@ -81,9 +91,8 @@ runs:
           scenarios/${{ inputs.molecule_scenario }}
 
     - name: Check out the infra repository
-      uses: https://github.com/actions/checkout@v4
+      uses: https://github.com/actions/checkout@v5
       with:
-        github-server-url: https://git.msqu.de
         repository: infrastructure/infra
         token: ${{ inputs.token }}
         path: 'git_infra'
@@ -124,9 +133,9 @@ runs:
         PY_COLORS: '1'
         TEST_TYPE: "${{ inputs.test_type }}"
         # Cloud Provider Credentials
-        AWS_DEFAULT_REGION: "${{ inputs.AWS_DEFAULT_REGION }}"
-        AWS_ACCESS_KEY_ID: "${{ inputs.AWS_ACCESS_KEY_ID }}"
-        AWS_SECRET_ACCESS_KEY: "${{ inputs.AWS_SECRET_ACCESS_KEY }}"
-        DO_API_TOKEN: "${{ inputs.DO_API_TOKEN }}"
-        HCLOUD_TOKEN: "${{ inputs.HCLOUD_TOKEN }}"
-        VULTR_API_KEY: "${{ inputs.VULTR_API_KEY }}"
+        AWS_DEFAULT_REGION: "${{ inputs.aws_default_region }}"
+        AWS_ACCESS_KEY_ID: "${{ inputs.aws_access_key_id }}"
+        AWS_SECRET_ACCESS_KEY: "${{ inputs.aws_secret_access_key }}"
+        DO_API_TOKEN: "${{ inputs.do_api_token }}"
+        HCLOUD_TOKEN: "${{ inputs.hcloud_token }}"
+        VULTR_API_KEY: "${{ inputs.vultr_api_key }}"
