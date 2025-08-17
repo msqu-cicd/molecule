@@ -7,51 +7,9 @@ inputs:
   ansible_vault_password:
     description: Ansible Vault Password
     default: ''
-  args:
-    description: 'Additional arguments passed to molecule test'
-    default: ''
-  aws_access_key_id:
-    description: 'Specifies an AWS access key associated with an IAM account'
-    default: ''
-  aws_secret_access_key:
-    description: 'Specifies the secret key associated with the access key. This is essentially the "password" for the access key'
-    default: ''
-  aws_default_region:
-    description: 'identifies the AWS Region whose servers you want to send your requests to by default'
-    default: 'eu-central-1'
   distro:
     description: 'Execute tests against distribution'
     default: 'debian-12'
-  do_api_token:
-    description: 'DigitalOcean PAT'
-    default: ''
-  hcloud_token:
-    description: 'Hetzner API Token'
-    default: ''
-  hcloud_server_state:
-    description: 'Server State after Molecule run'
-    default: 'absent'
-  molecule_debug:
-    description: Whether to tell the GitHub client to log details of its requests
-    default: ''
-  molecule_scenario:
-    description: Molecule scenario for testing
-    default: 'docker'
-  molecule_version:
-    description: Molecule version to use, leave empty for newest
-    default: ''
-  ssh_key:
-    description: 'SSH Key to use'
-    default: ''
-  test_type:
-    description: 'Choose between: unit|integration'
-    default: 'unit'
-  token:
-    description: 'Forgejo Runner token'
-    default: ''
-  vultr_api_key:
-    description: 'Vultr PAT'
-    default: ''
 
 runs:
   using: "composite"
