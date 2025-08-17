@@ -52,7 +52,8 @@ runs:
         path: git_infra
         ref: main
         fetch-depth: 0
-        sparse-checkout: requirements/collections_git.yml
+        sparse-checkout: |
+          requirements/
 
     - name: Install collections from collections_git.yml
       run: ansible-galaxy install -r git_infra/requirements/collections_git.yml

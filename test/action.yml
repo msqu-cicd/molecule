@@ -1,0 +1,133 @@
+name: Ansible Molecule
+description: Run Ansible Molecule
+author: Michael Schmitz
+
+inputs:
+  ansible_vault_password:
+    description: 'Ansible Vault Password'
+    required: true
+  args:
+    description: 'Additional arguments passed to molecule test'
+    default: ''
+  aws_access_key_id:
+    description: 'AWS access key for IAM account'
+    default: ''
+  aws_secret_access_key:
+    description: 'Secret key associated with AWS access key'
+    default: ''
+  aws_default_region:
+    description: 'AWS default region'
+    default: 'eu-central-1'
+  distro:
+    description: 'Execute tests against distribution'
+    default: 'debian-12'
+  do_api_token:
+    description: 'DigitalOcean Personal Access Token'
+    default: ''
+  hcloud_token:
+    description: 'Hetzner Cloud API Token'
+    default: ''
+  hcloud_server_state:
+    description: 'Server state after Molecule run'
+    default: 'absent'
+  molecule_debug:
+    description: 'Enable Molecule debug logging'
+    default: 'false'
+  molecule_scenario:
+    description: 'Molecule scenario for testing'
+    default: 'docker'
+  molecule_version:
+    description: 'Molecule version to use, leave empty for newest'
+    default: ''
+  ssh_key:
+    description: 'SSH Key to use'
+    default: ''
+  test_type:
+    description: 'Choose between: unit|integration'
+    default: 'unit'
+  token:
+    description: 'Gitea Runner token (pass via workflow secrets)'
+    required: true
+  vultr_api_key:
+    description: 'Vultr API Key'
+    default: ''
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set CI_HOSTNAME / CI_PROJECT_NAME_MOLECULE
+      run: |
+        echo "CI_HOSTNAME=$(echo $MOLECULE_DISTRO | tr -dc '[:alnum:]\n\r' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+        echo "CI_PROJECT_NAME_MOLECULE=$(echo ${GITHUB_REPOSITORY#*/} | tr '_' '-')" >> $GITHUB_ENV
+      shell: bash
+      env:
+        MOLECULE_DISTRO: "${{ inputs.distro }}"
+
+    - name: Prepare Ansible Vault
+      run: echo "${{ inputs.ansible_vault_password }}" > "$GITHUB_WORKSPACE/.vault"
+      shell: bash
+
+    - name: Check out the molecule repository
+      uses: https://github.com/actions/checkout@v5
+      with:
+        github-server-url: https://git.msqu.de
+        repository: cicd/molecule
+        token: ${{ inputs.token }}
+        path: 'git_molecule'
+        ref: 'main'
+        fetch-depth: 0
+        sparse-checkout: |
+          scenarios/${{ inputs.molecule_scenario }}
+
+    - name: Check out the infra repository
+      uses: https://github.com/actions/checkout@v5
+      with:
+        github-server-url: https://git.msqu.de
+        repository: infrastructure/infra
+        token: ${{ inputs.token }}
+        path: 'git_infra'
+        ref: 'main'
+        fetch-depth: 0
+        sparse-checkout: |
+          requirements
+          group_vars
+
+    - name: Prepare Molecule Scenario
+      run: |
+        mkdir -p ${GITHUB_WORKSPACE}/molecule/default
+        rsync -avzh --ignore-existing --ignore-errors git_molecule/scenarios/${{ inputs.molecule_scenario }}/ ${GITHUB_WORKSPACE}/molecule/default/
+      shell: bash
+
+    - name: Sync vars
+      run: |
+        if [[ "${{ inputs.test_type }}" == "unit" ]] && [[ -f "${GITHUB_WORKSPACE}/tests/vars.yml" ]]; then
+          mkdir -p ${GITHUB_WORKSPACE}/molecule/default/group_vars/all/
+          rsync -aP ${GITHUB_WORKSPACE}/tests/vars.yml ${GITHUB_WORKSPACE}/molecule/default/group_vars/all/test_vars.yml
+        elif [[ "${{ inputs.test_type }}" == "integration" ]]; then
+          rsync -aP git_infra/group_vars ${GITHUB_WORKSPACE}/molecule/default/
+        fi
+      shell: bash
+
+    - name: Run Molecule tests
+      run: molecule test ${{ inputs.args }}
+      shell: bash
+      env:
+        ANSIBLE_FORCE_COLOR: '1'
+        ANSIBLE_VERBOSITY: '2'
+        CI_JOB_ID: "${{ github.run_id }}"
+        CI_PROJECT_DIR: "$GITHUB_WORKSPACE"
+        GITEA_TOKEN: "${{ inputs.token }}"
+        HCLOUD_SERVER_STATE: "${{ inputs.hcloud_server_state }}"
+        MOLECULE_DEBUG: "${{ inputs.molecule_debug }}"
+        MOLECULE_DISTRO: "${{ inputs.distro }}"
+        MOLECULE_SCENARIO_NAME: "${{ inputs.molecule_scenario }}"
+        PY_COLORS: '1'
+        TEST_TYPE: "${{ inputs.test_type }}"
+        # Cloud Provider Credentials
+        AWS_DEFAULT_REGION: "${{ inputs.aws_default_region }}"
+        AWS_ACCESS_KEY_ID: "${{ inputs.aws_access_key_id }}"
+        AWS_SECRET_ACCESS_KEY: "${{ inputs.aws_secret_access_key }}"
+        DO_API_TOKEN: "${{ inputs.do_api_token }}"
+        HCLOUD_TOKEN: "${{ inputs.hcloud_token }}"
+        VULTR_API_KEY: "${{ inputs.vultr_api_key }}"
+        ANSIBLE_VAULT_PASSWORD: "${{ inputs.ansible_vault_password }}"
