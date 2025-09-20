@@ -23,7 +23,7 @@ runs:
       shell: bash
 
     - name: Setup Python
-      uses: https://github.com/actions/setup-python@v5
+      uses: https://github.com/actions/setup-python@v6
       with:
         python-version: "3.13"
 
