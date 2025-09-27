@@ -50,7 +50,7 @@
 
     - name: Include converge override tasks
       ansible.builtin.include_tasks: "{{ converge_override_file }}"
-      when: converge_override_file is file
+      when: converge_override_file | default('') | length > 0 and converge_override_file is file
 
   tasks:
     - name: "{{ lookup('env', 'MOLECULE_PROJECT_DIRECTORY') | basename }}"
