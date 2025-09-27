@@ -22,11 +22,11 @@ provisioner:
   config_options:
     defaults:
       bin_ansible_callbacks: yes
-      callbacks_enabled: ansible.posix.timer, ansible.posix.profile_tasks, community.general.yaml
+      callbacks_enabled: ansible.posix.timer, ansible.posix.profile_tasks
       display_failed_stderr: true
       host_key_checking: false
       remote_tmp: '/tmp/.ansible-${USER}/tmp'
-      stdout_callback: yaml
+      callback_result_format: yaml
       vault_password_file: ${CI_PROJECT_DIR}/.vault
     diff:
       always: true
