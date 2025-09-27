@@ -37,6 +37,6 @@ collections:
   - name: bodsch.core
     version: "1.5.0"
   - name: bodsch.scm
-    version: "1.1.0"
+    version: "1.6.0"
   - name: bodsch.systemd
     version: "1.1.0"
