@@ -1,0 +1,675 @@
+name: Molecule Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      args:
+        description: 'Additional arguments passed to molecule test'
+        default: ''
+        type: string
+      molecule_debug:
+        description: 'Enable molecule debug mode'
+        default: false
+        type: boolean
+      force_run:
+        description: 'Force run tests even if no changes detected'
+        default: false
+        type: boolean
+  pull_request:
+  push:
+    paths-ignore:
+      - '.ansible-lint'
+      - '.gitea/**'
+      - '.github/**'
+      - '.yamllint'
+      - 'Makefile'
+      - 'meta/main.yml'
+      - 'README.md'
+      - 'renovate.json'
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-24.04
+    outputs:
+      any_changed: ${{ steps.changed.outputs.any_changed }}
+    steps:
+      - uses: https://github.com/actions/checkout@v5
+      - id: changed
+        uses: tj-actions/changed-files@v47
+        with:
+          files_ignore: |
+            .ansible-lint
+            .gitea/**
+            .github/**
+            .yamllint
+            Makefile
+            meta/main.yml
+            README.md
+            renovate.json
+
+  lint:
+    runs-on: ubuntu-24.04
+    needs: changes
+    if: needs.changes.outputs.any_changed == 'true' || inputs.force_run
+    steps:
+      - uses: https://github.com/actions/checkout@v5
+      - name: Ansible Lint
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/git \
+            git.msqu.de/devops/molecule:lint \
+            ansible-lint --force-color -p --offline /git
+      - name: Yaml Lint
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/git \
+            git.msqu.de/devops/molecule:lint \
+            yamllint -f colored /git
+
+  molecule-unit-debian:
+    runs-on: ubuntu-24.04
+    needs: [changes, lint]
+    if: needs.changes.outputs.any_changed == 'true' || inputs.force_run
+    env:
+      TEST_TYPE: unit
+      HCLOUD_SERVER_STATE: stopped
+      MOLECULE_DISTRO: debian-13
+      MOLECULE_SCENARIO_NAME: hetznercloud
+    steps:
+      - name: Checkout repository
+        uses: https://github.com/actions/checkout@v5
+
+      - name: Cache apt packages
+        uses: https://github.com/actions/cache@v4
+        with:
+          path: /var/cache/apt
+          key: apt-${{ runner.os }}-${{ env.MOLECULE_DISTRO }}
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq -o=Dpkg::Use-Pty=0
+          sudo apt-get install -qq -o=Dpkg::Use-Pty=0 rsync
+
+      - name: Setup Python
+        uses: https://github.com/actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Cache Python dependencies
+        uses: https://github.com/actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('**/requirements*.txt', '**/requirements*.yml') }}-${{ env.MOLECULE_DISTRO }}
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh/
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keygen -y -f ~/.ssh/id_ed25519 > ~/.ssh/id_ed25519.pub
+          echo "SSH Key Fingerprint: $(ssh-keygen -l -E md5 -f ~/.ssh/id_ed25519)"
+          cat > ~/.ssh/config << EOF
+          Host *
+            StrictHostKeyChecking no
+            UserKnownHostsFile=/dev/null
+          EOF
+          eval "$(ssh-agent -s)" && ssh-add ~/.ssh/id_ed25519
+
+      - name: Install Python dependencies
+        run: |
+          pip install --break-system-packages --quiet \
+            ansible-core \
+            molecule \
+            netaddr \
+            jmespath \
+            dnspython \
+            python-dateutil \
+            Jinja2 \
+            requests \
+            passlib
+
+      - name: Checkout infra repository
+        uses: https://github.com/actions/checkout@v5
+        with:
+          github-server-url: https://git.msqu.de
+          repository: infrastructure/infra
+          token: '${{ secrets.CI_RUNNER_PAT }}'
+          path: git_infra
+          ref: main
+          fetch-depth: 0
+          sparse-checkout: |
+            requirements/
+            group_vars/
+
+      - name: Cache Ansible collections
+        uses: https://github.com/actions/cache@v4
+        with:
+          path: ~/.ansible
+          key: ansible-collections-${{ hashFiles('git_infra/requirements/collections_git.yml') }}-${{ env.MOLECULE_DISTRO }}
+
+      - name: Install Ansible collections
+        run: ansible-galaxy install -r git_infra/requirements/collections_git.yml
+
+      - name: Set environment variables
+        run: |
+          {
+            echo "CI_HOSTNAME=$(echo ${{ env.MOLECULE_DISTRO }} | tr -dc '[:alnum:]\n\r' | tr '[:upper:]' '[:lower:]')"
+            echo "CI_PROJECT_NAME_MOLECULE=$(echo ${GITHUB_REPOSITORY#*/} | tr '_' '-')"
+            echo "MOLECULE_DISTRO=${{ env.MOLECULE_DISTRO }}"
+            echo "CI_PROJECT_DIR=$GITHUB_WORKSPACE"
+          } >> $GITHUB_ENV
+
+      - name: Prepare Ansible Vault
+        run: echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > "$GITHUB_WORKSPACE/.vault"
+
+      - name: Checkout molecule scenarios
+        uses: https://github.com/actions/checkout@v5
+        with:
+          github-server-url: https://git.msqu.de
+          repository: cicd/molecule
+          token: '${{ secrets.CI_RUNNER_PAT }}'
+          path: git_molecule
+          ref: main
+          fetch-depth: 0
+          sparse-checkout: |
+            scenarios/${{ env.MOLECULE_SCENARIO_NAME }}
+
+      - name: Setup molecule scenario
+        run: |
+          mkdir -p ${GITHUB_WORKSPACE}/molecule/default
+          rsync -avzh --ignore-existing --ignore-errors \
+            git_molecule/scenarios/${{ env.MOLECULE_SCENARIO_NAME }}/ \
+            ${GITHUB_WORKSPACE}/molecule/default/
+
+      - name: Configure unit test variables
+        run: |
+          if [[ -f "${GITHUB_WORKSPACE}/tests/vars.yml" ]]; then
+            mkdir -p ${GITHUB_WORKSPACE}/molecule/default/group_vars/all/
+            rsync -aP ${GITHUB_WORKSPACE}/tests/vars.yml \
+              ${GITHUB_WORKSPACE}/molecule/default/group_vars/all/test_vars.yml
+          fi
+
+      - name: Setup debugging session
+        if: ${{ inputs.molecule_debug || false }}
+        uses: https://github.com/mxschmitt/action-tmate.git@v3
+        with:
+          limit-access-to-actor: true
+
+      - name: Run Molecule unit tests
+        run: molecule test ${{ inputs.args }}
+        env:
+          ANSIBLE_FORCE_COLOR: '1'
+          ANSIBLE_VERBOSITY: '1'
+          CI_JOB_ID: "${{ github.run_id }}"
+          CI_PROJECT_DIR: "$GITHUB_WORKSPACE"
+          GITEA_TOKEN: "${{ secrets.CI_RUNNER_PAT }}"
+          HCLOUD_SERVER_STATE: "${{ env.HCLOUD_SERVER_STATE }}"
+          MOLECULE_DEBUG: "${{ inputs.molecule_debug }}"
+          MOLECULE_DISTRO: "${{ env.MOLECULE_DISTRO }}"
+          MOLECULE_SCENARIO_NAME: "${{ env.MOLECULE_SCENARIO_NAME }}"
+          PY_COLORS: '1'
+          TEST_TYPE: "${{ env.TEST_TYPE }}"
+          HCLOUD_TOKEN: "${{ secrets.hcloud_token }}"
+          ANSIBLE_VAULT_PASSWORD: "${{ secrets.ANSIBLE_VAULT_PASSWORD }}"
+
+      - name: Cleanup workspace
+        if: always()
+        run: |
+          cd ${GITHUB_WORKSPACE}
+          shopt -s dotglob
+          rm -rf *
+
+  molecule-unit-ubuntu:
+    runs-on: ubuntu-24.04
+    needs: [changes, lint, molecule-unit-debian]
+    if: needs.changes.outputs.any_changed == 'true' || inputs.force_run
+    env:
+      TEST_TYPE: unit
+      HCLOUD_SERVER_STATE: stopped
+      MOLECULE_DISTRO: ubuntu-24.04
+      MOLECULE_SCENARIO_NAME: hetznercloud
+    steps:
+      - name: Checkout repository
+        uses: https://github.com/actions/checkout@v5
+
+      - name: Cache apt packages
+        uses: https://github.com/actions/cache@v4
+        with:
+          path: /var/cache/apt
+          key: apt-${{ runner.os }}-${{ env.MOLECULE_DISTRO }}
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq -o=Dpkg::Use-Pty=0
+          sudo apt-get install -qq -o=Dpkg::Use-Pty=0 rsync
+
+      - name: Setup Python
+        uses: https://github.com/actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Cache Python dependencies
+        uses: https://github.com/actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('**/requirements*.txt', '**/requirements*.yml') }}-${{ env.MOLECULE_DISTRO }}
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh/
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keygen -y -f ~/.ssh/id_ed25519 > ~/.ssh/id_ed25519.pub
+          echo "SSH Key Fingerprint: $(ssh-keygen -l -E md5 -f ~/.ssh/id_ed25519)"
+          cat > ~/.ssh/config << EOF
+          Host *
+            StrictHostKeyChecking no
+            UserKnownHostsFile=/dev/null
+          EOF
+          eval "$(ssh-agent -s)" && ssh-add ~/.ssh/id_ed25519
+
+      - name: Install Python dependencies
+        run: |
+          pip install --break-system-packages --quiet \
+            ansible-core \
+            molecule \
+            netaddr \
+            jmespath \
+            dnspython \
+            python-dateutil \
+            Jinja2 \
+            requests \
+            passlib
+
+      - name: Checkout infra repository
+        uses: https://github.com/actions/checkout@v5
+        with:
+          github-server-url: https://git.msqu.de
+          repository: infrastructure/infra
+          token: '${{ secrets.CI_RUNNER_PAT }}'
+          path: git_infra
+          ref: main
+          fetch-depth: 0
+          sparse-checkout: |
+            requirements/
+            group_vars/
+
+      - name: Cache Ansible collections
+        uses: https://github.com/actions/cache@v4
+        with:
+          path: ~/.ansible
+          key: ansible-collections-${{ hashFiles('git_infra/requirements/collections_git.yml') }}-${{ env.MOLECULE_DISTRO }}
+
+      - name: Install Ansible collections
+        run: ansible-galaxy install -r git_infra/requirements/collections_git.yml
+
+      - name: Set environment variables
+        run: |
+          {
+            echo "CI_HOSTNAME=$(echo ${{ env.MOLECULE_DISTRO }} | tr -dc '[:alnum:]\n\r' | tr '[:upper:]' '[:lower:]')"
+            echo "CI_PROJECT_NAME_MOLECULE=$(echo ${GITHUB_REPOSITORY#*/} | tr '_' '-')"
+            echo "MOLECULE_DISTRO=${{ env.MOLECULE_DISTRO }}"
+            echo "CI_PROJECT_DIR=$GITHUB_WORKSPACE"
+          } >> $GITHUB_ENV
+
+      - name: Prepare Ansible Vault
+        run: echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > "$GITHUB_WORKSPACE/.vault"
+
+      - name: Checkout molecule scenarios
+        uses: https://github.com/actions/checkout@v5
+        with:
+          github-server-url: https://git.msqu.de
+          repository: cicd/molecule
+          token: '${{ secrets.CI_RUNNER_PAT }}'
+          path: git_molecule
+          ref: main
+          fetch-depth: 0
+          sparse-checkout: |
+            scenarios/${{ env.MOLECULE_SCENARIO_NAME }}
+
+      - name: Setup molecule scenario
+        run: |
+          mkdir -p ${GITHUB_WORKSPACE}/molecule/default
+          rsync -avzh --ignore-existing --ignore-errors \
+            git_molecule/scenarios/${{ env.MOLECULE_SCENARIO_NAME }}/ \
+            ${GITHUB_WORKSPACE}/molecule/default/
+
+      - name: Configure unit test variables
+        run: |
+          if [[ -f "${GITHUB_WORKSPACE}/tests/vars.yml" ]]; then
+            mkdir -p ${GITHUB_WORKSPACE}/molecule/default/group_vars/all/
+            rsync -aP ${GITHUB_WORKSPACE}/tests/vars.yml \
+              ${GITHUB_WORKSPACE}/molecule/default/group_vars/all/test_vars.yml
+          fi
+
+      - name: Setup debugging session
+        if: ${{ inputs.molecule_debug || false }}
+        uses: https://github.com/mxschmitt/action-tmate.git@v3
+        with:
+          limit-access-to-actor: true
+
+      - name: Run Molecule unit tests
+        run: molecule test ${{ inputs.args }}
+        env:
+          ANSIBLE_FORCE_COLOR: '1'
+          ANSIBLE_VERBOSITY: '1'
+          CI_JOB_ID: "${{ github.run_id }}"
+          CI_PROJECT_DIR: "$GITHUB_WORKSPACE"
+          GITEA_TOKEN: "${{ secrets.CI_RUNNER_PAT }}"
+          HCLOUD_SERVER_STATE: "${{ env.HCLOUD_SERVER_STATE }}"
+          MOLECULE_DEBUG: "${{ inputs.molecule_debug }}"
+          MOLECULE_DISTRO: "${{ env.MOLECULE_DISTRO }}"
+          MOLECULE_SCENARIO_NAME: "${{ env.MOLECULE_SCENARIO_NAME }}"
+          PY_COLORS: '1'
+          TEST_TYPE: "${{ env.TEST_TYPE }}"
+          HCLOUD_TOKEN: "${{ secrets.hcloud_token }}"
+          ANSIBLE_VAULT_PASSWORD: "${{ secrets.ANSIBLE_VAULT_PASSWORD }}"
+
+      - name: Cleanup workspace
+        if: always()
+        run: |
+          cd ${GITHUB_WORKSPACE}
+          shopt -s dotglob
+          rm -rf *
+
+  molecule-integration-debian:
+    runs-on: ubuntu-24.04
+    needs: [changes, lint, molecule-unit-debian, molecule-unit-ubuntu]
+    if: (needs.changes.outputs.any_changed == 'true' || inputs.force_run) && always() && needs.molecule-unit-debian.result == 'success'
+    env:
+      TEST_TYPE: integration
+      HCLOUD_SERVER_STATE: stopped
+      MOLECULE_DISTRO: debian-13
+      MOLECULE_SCENARIO_NAME: hetznercloud
+    steps:
+      - name: Checkout repository
+        uses: https://github.com/actions/checkout@v5
+
+      - name: Cache apt packages
+        uses: https://github.com/actions/cache@v4
+        with:
+          path: /var/cache/apt
+          key: apt-${{ runner.os }}-${{ env.MOLECULE_DISTRO }}
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq -o=Dpkg::Use-Pty=0
+          sudo apt-get install -qq -o=Dpkg::Use-Pty=0 rsync
+
+      - name: Setup Python
+        uses: https://github.com/actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Cache Python dependencies
+        uses: https://github.com/actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('**/requirements*.txt', '**/requirements*.yml') }}-${{ env.MOLECULE_DISTRO }}
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh/
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keygen -y -f ~/.ssh/id_ed25519 > ~/.ssh/id_ed25519.pub
+          echo "SSH Key Fingerprint: $(ssh-keygen -l -E md5 -f ~/.ssh/id_ed25519)"
+          cat > ~/.ssh/config << EOF
+          Host *
+            StrictHostKeyChecking no
+            UserKnownHostsFile=/dev/null
+          EOF
+          eval "$(ssh-agent -s)" && ssh-add ~/.ssh/id_ed25519
+
+      - name: Install Python dependencies
+        run: |
+          pip install --break-system-packages --quiet \
+            ansible-core \
+            molecule \
+            netaddr \
+            jmespath \
+            dnspython \
+            python-dateutil \
+            Jinja2 \
+            requests \
+            passlib
+
+      - name: Checkout infra repository
+        uses: https://github.com/actions/checkout@v5
+        with:
+          github-server-url: https://git.msqu.de
+          repository: infrastructure/infra
+          token: '${{ secrets.CI_RUNNER_PAT }}'
+          path: git_infra
+          ref: main
+          fetch-depth: 0
+          sparse-checkout: |
+            requirements/
+            group_vars/
+
+      - name: Cache Ansible collections
+        uses: https://github.com/actions/cache@v4
+        with:
+          path: ~/.ansible
+          key: ansible-collections-${{ hashFiles('git_infra/requirements/collections_git.yml') }}-${{ env.MOLECULE_DISTRO }}
+
+      - name: Install Ansible collections
+        run: ansible-galaxy install -r git_infra/requirements/collections_git.yml
+
+      - name: Set environment variables
+        run: |
+          {
+            echo "CI_HOSTNAME=$(echo ${{ env.MOLECULE_DISTRO }} | tr -dc '[:alnum:]\n\r' | tr '[:upper:]' '[:lower:]')"
+            echo "CI_PROJECT_NAME_MOLECULE=$(echo ${GITHUB_REPOSITORY#*/} | tr '_' '-')"
+            echo "MOLECULE_DISTRO=${{ env.MOLECULE_DISTRO }}"
+            echo "CI_PROJECT_DIR=$GITHUB_WORKSPACE"
+          } >> $GITHUB_ENV
+
+      - name: Prepare Ansible Vault
+        run: echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > "$GITHUB_WORKSPACE/.vault"
+
+      - name: Checkout molecule scenarios
+        uses: https://github.com/actions/checkout@v5
+        with:
+          github-server-url: https://git.msqu.de
+          repository: cicd/molecule
+          token: '${{ secrets.CI_RUNNER_PAT }}'
+          path: git_molecule
+          ref: main
+          fetch-depth: 0
+          sparse-checkout: |
+            scenarios/${{ env.MOLECULE_SCENARIO_NAME }}
+
+      - name: Setup molecule scenario
+        run: |
+          mkdir -p ${GITHUB_WORKSPACE}/molecule/default
+          rsync -avzh --ignore-existing --ignore-errors \
+            git_molecule/scenarios/${{ env.MOLECULE_SCENARIO_NAME }}/ \
+            ${GITHUB_WORKSPACE}/molecule/default/
+
+      - name: Configure integration test variables
+        run: |
+          rsync -aP git_infra/group_vars ${GITHUB_WORKSPACE}/molecule/default/
+
+      - name: Setup debugging session
+        if: ${{ inputs.molecule_debug || false }}
+        uses: https://github.com/mxschmitt/action-tmate.git@v3
+        with:
+          limit-access-to-actor: true
+
+      - name: Run Molecule integration tests
+        run: molecule test ${{ inputs.args }}
+        env:
+          ANSIBLE_FORCE_COLOR: '1'
+          ANSIBLE_VERBOSITY: '1'
+          CI_JOB_ID: "${{ github.run_id }}"
+          CI_PROJECT_DIR: "$GITHUB_WORKSPACE"
+          GITEA_TOKEN: "${{ secrets.CI_RUNNER_PAT }}"
+          HCLOUD_SERVER_STATE: "${{ env.HCLOUD_SERVER_STATE }}"
+          MOLECULE_DEBUG: "${{ inputs.molecule_debug }}"
+          MOLECULE_DISTRO: "${{ env.MOLECULE_DISTRO }}"
+          MOLECULE_SCENARIO_NAME: "${{ env.MOLECULE_SCENARIO_NAME }}"
+          PY_COLORS: '1'
+          TEST_TYPE: "${{ env.TEST_TYPE }}"
+          HCLOUD_TOKEN: "${{ secrets.hcloud_token }}"
+          ANSIBLE_VAULT_PASSWORD: "${{ secrets.ANSIBLE_VAULT_PASSWORD }}"
+
+      - name: Cleanup workspace
+        if: always()
+        run: |
+          cd ${GITHUB_WORKSPACE}
+          shopt -s dotglob
+          rm -rf *
+
+  molecule-integration-ubuntu:
+    runs-on: ubuntu-24.04
+    needs: [changes, lint, molecule-unit-ubuntu, molecule-integration-debian]
+    if: (needs.changes.outputs.any_changed == 'true' || inputs.force_run) && always() && needs.molecule-unit-ubuntu.result == 'success'
+    env:
+      TEST_TYPE: integration
+      HCLOUD_SERVER_STATE: absent
+      MOLECULE_DISTRO: ubuntu-24.04
+      MOLECULE_SCENARIO_NAME: hetznercloud
+    steps:
+      - name: Checkout repository
+        uses: https://github.com/actions/checkout@v5
+
+      - name: Cache apt packages
+        uses: https://github.com/actions/cache@v4
+        with:
+          path: /var/cache/apt
+          key: apt-${{ runner.os }}-${{ env.MOLECULE_DISTRO }}
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq -o=Dpkg::Use-Pty=0
+          sudo apt-get install -qq -o=Dpkg::Use-Pty=0 rsync
+
+      - name: Setup Python
+        uses: https://github.com/actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Cache Python dependencies
+        uses: https://github.com/actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('**/requirements*.txt', '**/requirements*.yml') }}-${{ env.MOLECULE_DISTRO }}
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh/
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keygen -y -f ~/.ssh/id_ed25519 > ~/.ssh/id_ed25519.pub
+          echo "SSH Key Fingerprint: $(ssh-keygen -l -E md5 -f ~/.ssh/id_ed25519)"
+          cat > ~/.ssh/config << EOF
+          Host *
+            StrictHostKeyChecking no
+            UserKnownHostsFile=/dev/null
+          EOF
+          eval "$(ssh-agent -s)" && ssh-add ~/.ssh/id_ed25519
+
+      - name: Install Python dependencies
+        run: |
+          pip install --break-system-packages --quiet \
+            ansible-core \
+            molecule \
+            netaddr \
+            jmespath \
+            dnspython \
+            python-dateutil \
+            Jinja2 \
+            requests \
+            passlib
+
+      - name: Checkout infra repository
+        uses: https://github.com/actions/checkout@v5
+        with:
+          github-server-url: https://git.msqu.de
+          repository: infrastructure/infra
+          token: '${{ secrets.CI_RUNNER_PAT }}'
+          path: git_infra
+          ref: main
+          fetch-depth: 0
+          sparse-checkout: |
+            requirements/
+            group_vars/
+
+      - name: Cache Ansible collections
+        uses: https://github.com/actions/cache@v4
+        with:
+          path: ~/.ansible
+          key: ansible-collections-${{ hashFiles('git_infra/requirements/collections_git.yml') }}-${{ env.MOLECULE_DISTRO }}
+
+      - name: Install Ansible collections
+        run: ansible-galaxy install -r git_infra/requirements/collections_git.yml
+
+      - name: Set environment variables
+        run: |
+          {
+            echo "CI_HOSTNAME=$(echo ${{ env.MOLECULE_DISTRO }} | tr -dc '[:alnum:]\n\r' | tr '[:upper:]' '[:lower:]')"
+            echo "CI_PROJECT_NAME_MOLECULE=$(echo ${GITHUB_REPOSITORY#*/} | tr '_' '-')"
+            echo "MOLECULE_DISTRO=${{ env.MOLECULE_DISTRO }}"
+            echo "CI_PROJECT_DIR=$GITHUB_WORKSPACE"
+          } >> $GITHUB_ENV
+
+      - name: Prepare Ansible Vault
+        run: echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > "$GITHUB_WORKSPACE/.vault"
+
+      - name: Checkout molecule scenarios
+        uses: https://github.com/actions/checkout@v5
+        with:
+          github-server-url: https://git.msqu.de
+          repository: cicd/molecule
+          token: '${{ secrets.CI_RUNNER_PAT }}'
+          path: git_molecule
+          ref: main
+          fetch-depth: 0
+          sparse-checkout: |
+            scenarios/${{ env.MOLECULE_SCENARIO_NAME }}
+
+      - name: Setup molecule scenario
+        run: |
+          mkdir -p ${GITHUB_WORKSPACE}/molecule/default
+          rsync -avzh --ignore-existing --ignore-errors \
+            git_molecule/scenarios/${{ env.MOLECULE_SCENARIO_NAME }}/ \
+            ${GITHUB_WORKSPACE}/molecule/default/
+
+      - name: Configure integration test variables
+        run: |
+          rsync -aP git_infra/group_vars ${GITHUB_WORKSPACE}/molecule/default/
+
+      - name: Setup debugging session
+        if: ${{ inputs.molecule_debug || false }}
+        uses: https://github.com/mxschmitt/action-tmate.git@v3
+        with:
+          limit-access-to-actor: true
+
+      - name: Run Molecule integration tests
+        run: molecule test ${{ inputs.args }}
+        env:
+          ANSIBLE_FORCE_COLOR: '1'
+          ANSIBLE_VERBOSITY: '1'
+          CI_JOB_ID: "${{ github.run_id }}"
+          CI_PROJECT_DIR: "$GITHUB_WORKSPACE"
+          GITEA_TOKEN: "${{ secrets.CI_RUNNER_PAT }}"
+          HCLOUD_SERVER_STATE: "${{ env.HCLOUD_SERVER_STATE }}"
+          MOLECULE_DEBUG: "${{ inputs.molecule_debug }}"
+          MOLECULE_DISTRO: "${{ env.MOLECULE_DISTRO }}"
+          MOLECULE_SCENARIO_NAME: "${{ env.MOLECULE_SCENARIO_NAME }}"
+          PY_COLORS: '1'
+          TEST_TYPE: "${{ env.TEST_TYPE }}"
+          HCLOUD_TOKEN: "${{ secrets.hcloud_token }}"
+          ANSIBLE_VAULT_PASSWORD: "${{ secrets.ANSIBLE_VAULT_PASSWORD }}"
+
+      - name: Cleanup workspace
+        if: always()
+        run: |
+          cd ${GITHUB_WORKSPACE}
+          shopt -s dotglob
+          rm -rf *
