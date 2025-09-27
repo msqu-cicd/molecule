@@ -10,6 +10,10 @@ platforms:
     location: ${INSTANCE_REGION:-fsn1}
     groups:
       - master
+    labels:
+      environment: molecule
+      project: ${CI_PROJECT_NAME:-molecule}
+      managed-by: molecule
     network:
       - name: ${CI_PROJECT_NAME_MOLECULE:-molecule}
         ip_range: 172.16.0.0/24
@@ -28,6 +32,9 @@ provisioner:
       remote_tmp: '/tmp/.ansible-${USER}/tmp'
       callback_result_format: yaml
       vault_password_file: ${CI_PROJECT_DIR}/.vault
+    ssh_connection:
+      ssh_args: '-o ControlMaster=auto -o ControlPersist=1800s -o ConnectionAttempts=100 -o UserKnownHostsFile=/dev/null -o PreferredAuthentications=publickey -o ServerAliveInterval=45 -o ServerAliveCountMax=10'
+      pipelining: true
     diff:
       always: true
     callback_profile_tasks:
@@ -37,6 +44,6 @@ provisioner:
     cleanup: ${MOLECULE_PLAYBOOK_CLEANUP:-cleanup.yml}
     converge: ${MOLECULE_PLAYBOOK_CONVERGE:-converge.yml}
     destroy: ${MOLECULE_PLAYBOOK_DESTROY:-destroy.yml}
-  log: True
+  log: true
 verifier:
   name: ansible
