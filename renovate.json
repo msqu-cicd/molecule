@@ -40,6 +40,14 @@
         "pin",
         "digest"
       ]
+    },
+    {
+      "matchManagers": [
+        "ansible-galaxy"
+      ],
+      "groupName": "ansible collections",
+      "groupSlug": "ansible-collections",
+      "semanticCommitScope": "ansible"
     }
   ],
   "customManagers": [
