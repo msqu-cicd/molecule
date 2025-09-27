@@ -55,7 +55,5 @@
       ansible.builtin.include_tasks: "{{ converge_override_file }}"
       when: converge_override_file is defined and converge_override_file != ""
 
-  tasks:
-    - name: "{{ lookup('env', 'MOLECULE_PROJECT_DIRECTORY') | basename }}"
-      ansible.builtin.include_role:
-        name: "{{ lookup('env', 'MOLECULE_PROJECT_DIRECTORY') | basename }}"
+  roles:
+    - role: "{{ lookup('env', 'MOLECULE_PROJECT_DIRECTORY') | basename }}"
