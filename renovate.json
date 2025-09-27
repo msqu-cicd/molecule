@@ -10,6 +10,9 @@
     "{{{manager}}}"
   ],
   "automergeStrategy": "merge-commit",
+  "prHourlyLimit": 10,
+  "prConcurrentLimit": 20,
+  "branchConcurrentLimit": 20,
   "packageRules": [
     {
       "matchDatasources": [
