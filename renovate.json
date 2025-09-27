@@ -55,6 +55,10 @@
       "depNameTemplate": "<org_name>/{{{depName}}}"
     }
   ],
+  "ansible-galaxy": {
+    "enabled": true,
+    "fileMatch": ["requirements/collections\\.ya?ml$"]
+  },
   "osvVulnerabilityAlerts": true,
   "dependencyDashboardOSVVulnerabilitySummary": "all"
 }
