@@ -659,6 +659,7 @@ jobs:
           CI_PROJECT_DIR: "$GITHUB_WORKSPACE"
           GITEA_TOKEN: "${{ secrets.CI_RUNNER_PAT }}"
           HCLOUD_SERVER_STATE: "${{ env.HCLOUD_SERVER_STATE }}"
+          HCLOUD_PRIVATE_NET: 'true'
           MOLECULE_DEBUG: "${{ inputs.molecule_debug }}"
           MOLECULE_DISTRO: "${{ env.MOLECULE_DISTRO }}"
           MOLECULE_SCENARIO_NAME: "${{ env.MOLECULE_SCENARIO_NAME }}"
