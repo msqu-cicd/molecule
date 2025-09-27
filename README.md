@@ -1,6 +1,6 @@
 # Molecule
 
-Github Action to use Molecule for Ansible Tests
+CI/CD infrastructure for Molecule-based Ansible testing with multiple cloud providers
 
 # Containers
 
@@ -25,17 +25,57 @@ Upstream Ubuntu 20.04 / 22.04 Docker Container with following extensions:
 - SystemD
 ...
 
+# Scenarios
+
+## Hetzner Cloud
+
+Optimized molecule scenario for Hetzner Cloud infrastructure testing with the following features:
+
+### Performance Optimizations
+- **Cloud-init based auto-update disable**: Prevents apt daily services from slowing down instance startup
+- **Optional private networking**: Set `HCLOUD_PRIVATE_NET=true` to enable private networks (disabled by default for faster provisioning)
+- **Resource labeling**: All resources (servers, volumes, networks) are automatically labeled for easy identification and cleanup
+
+### Environment Variables
+- `HCLOUD_TOKEN`: Hetzner Cloud API token (required)
+- `HCLOUD_PRIVATE_NET`: Enable private networking (`true`/`false`, default: `false`)
+- `INSTANCE_SIZE`: Server type (default: `cax11`)
+- `INSTANCE_REGION`: Location (default: `fsn1`)
+- `MOLECULE_DISTRO`: OS image (default: `debian-13`)
+
+### Resource Management
+- Servers use ARM64 `cax11` instances by default (cost-effective)
+- Automatic cleanup of all resources after testing
+- Labels applied: `environment: molecule`, `project: <project-name>`, `managed-by: molecule`
+
 # Usage
 
 ## CI Workflow
-To use this action in your repo you can create a new Github Workflow with the example [molecule.yml](examples/molecule.yml)
+Ansible roles are tested using standardized molecule workflows with the following structure:
 
-This will test your role against the following Ansible Scenarios:
-- `ansible_current`
-- `ansible_next`
-- `ansible_latest`
+### Test Execution Order
+1. **Changes Detection**: Skip tests if no relevant files changed
+2. **Lint**: Ansible-lint and yamllint validation
+3. **Unit Tests**: Sequential execution (Debian → Ubuntu)
+4. **Integration Tests**: Full deployment tests with fault tolerance
 
-Used Ansible Version for these scenarios are defined in [action.yml](examples/action.yml), but can be overridden. Leave `ansible_scenario` unset for simple tests against latest ansible and molecule version.
+### Workflow Features
+- **Concurrency Control**: New runs automatically cancel older ones
+- **Reduced Verbosity**: `ANSIBLE_VERBOSITY=1` for cleaner output
+- **Environment Parameterization**: Configurable distros and scenarios
+- **Fault Tolerance**: Integration tests can proceed even if some unit tests fail
+
+### Example Usage
+```bash
+# Basic test
+molecule test
+
+# With private networking
+HCLOUD_PRIVATE_NET=true molecule test
+
+# Different instance size
+INSTANCE_SIZE=cx22 molecule test
+```
 
 # Configuration
 ## Only Lint, no Molecule Tests
