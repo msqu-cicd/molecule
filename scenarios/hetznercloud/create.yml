@@ -126,6 +126,7 @@
         server: "{{ item.0.name }}"
         location: "{{ item.1.location | default(omit) }}"
         size: "{{ item.1.size | default(10) }}"
+        labels: "{{ item.0.labels | default({}) }}"
         api_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
         state: "present"
       loop: "{{ molecule_yml.platforms | subelements('volumes', skip_missing=True) }}"
@@ -148,6 +149,7 @@
       hetzner.hcloud.network:
         name: "{{ item.network[0].name }}"
         ip_range: "{{ item.network[0].ip_range | default(omit) }}"
+        labels: "{{ item.labels | default({}) }}"
         api_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
         state: "present"
       loop: "{{ molecule_yml.platforms }}"
