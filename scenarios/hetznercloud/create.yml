@@ -84,6 +84,7 @@
         image: "{{ item.image }}"
         location: "{{ item.location | default(omit) }}"
         datacenter: "{{ item.datacenter | default(omit) }}"
+        labels: "{{ item.labels | default({}) }}"
         user_data: |
           #cloud-config
           package_update: false
@@ -155,7 +156,9 @@
       loop: "{{ molecule_yml.platforms }}"
       loop_control:
         extended: yes
-      when: ansible_loop.first
+      when:
+        - ansible_loop.first
+        - lookup('env', 'HCLOUD_PRIVATE_NET') | bool
       register: networks
       async: 7200
       poll: 0
@@ -170,6 +173,7 @@
         - networks is defined
         - networks.changed
         - ansible_loop.first
+        - lookup('env', 'HCLOUD_PRIVATE_NET') | bool
       loop: "{{ networks.results }}"
       loop_control:
         extended: yes
@@ -185,7 +189,9 @@
       loop: "{{ molecule_yml.platforms }}"
       loop_control:
         extended: yes
-      when: ansible_loop.first
+      when:
+        - ansible_loop.first
+        - lookup('env', 'HCLOUD_PRIVATE_NET') | bool
       register: subnetworks
 
     - name: Attach Server to Subnetwork(s)
@@ -196,6 +202,7 @@
         api_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
         state: "present"
       loop: "{{ molecule_yml.platforms }}"
+      when: lookup('env', 'HCLOUD_PRIVATE_NET') | bool
       retries: 12
       delay: 10
       register: hcloud_server_network_result
