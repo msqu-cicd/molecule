@@ -57,7 +57,9 @@
   ],
   "ansible-galaxy": {
     "enabled": true,
-    "fileMatch": ["requirements/collections\\.ya?ml$"]
+    "managerFilePatterns": [
+      "/requirements/collections\\.ya?ml$/"
+    ]
   },
   "osvVulnerabilityAlerts": true,
   "dependencyDashboardOSVVulnerabilitySummary": "all"
