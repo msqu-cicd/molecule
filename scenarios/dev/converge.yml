@@ -3,12 +3,12 @@
   hosts: all
   become: true
   vars:
-    test_vars_file: "{{ lookup('first_found', playbook_dir + '/../../tests/vars.yml', errors='ignore') }}"
-    converge_override_file: "{{ lookup('first_found', playbook_dir + '/converge_override.yml', errors='ignore') }}"
+    test_vars_file: "{{ lookup('ansible.builtin.first_found', [playbook_dir + '/../../tests/vars.yml'], errors='ignore') or '' }}"
+    converge_override_file: "{{ lookup('ansible.builtin.first_found', [playbook_dir + '/converge_override.yml'], errors='ignore') or '' }}"
   pre_tasks:
     - name: include vars
       ansible.builtin.include_vars: "{{ test_vars_file }}"
-      when: test_vars_file is file
+      when: test_vars_file is defined and test_vars_file != ""
 
     - name: update APT Cache
       ansible.builtin.apt:
@@ -55,7 +55,7 @@
 
     - name: Include converge override tasks
       ansible.builtin.include_tasks: "{{ converge_override_file }}"
-      when: converge_override_file | default('') | length > 0 and converge_override_file is file
+      when: converge_override_file is defined and converge_override_file != ""
 
   tasks:
     - name: "{{ lookup('env', 'MOLECULE_PROJECT_DIRECTORY') | basename }}"

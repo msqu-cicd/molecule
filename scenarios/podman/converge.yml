@@ -3,7 +3,7 @@
   hosts: all
   become: true
   vars:
-    converge_override_file: "{{ lookup('first_found', playbook_dir + '/converge_override.yml', errors='ignore') }}"
+    converge_override_file: "{{ lookup('ansible.builtin.first_found', [playbook_dir + '/converge_override.yml'], errors='ignore') or '' }}"
   pre_tasks:
     - name: update APT Cache
       ansible.builtin.apt:
@@ -50,7 +50,7 @@
 
     - name: Include converge override tasks
       ansible.builtin.include_tasks: "{{ converge_override_file }}"
-      when: converge_override_file | default('') | length > 0 and converge_override_file is file
+      when: converge_override_file is defined and converge_override_file != ""
 
   tasks:
     - name: "{{ lookup('env', 'MOLECULE_PROJECT_DIRECTORY') | basename }}"
