@@ -84,7 +84,27 @@
         image: "{{ item.image }}"
         location: "{{ item.location | default(omit) }}"
         datacenter: "{{ item.datacenter | default(omit) }}"
-        user_data: "{{ item.user_data | default(omit) }}"
+        user_data: |
+          #cloud-config
+          package_update: false
+          package_upgrade: false
+          apt:
+            conf: |
+              APT::Periodic::Update-Package-Lists "0";
+              APT::Periodic::Download-Upgradeable-Packages "0";
+              APT::Periodic::AutocleanInterval "0";
+              APT::Periodic::Unattended-Upgrade "0";
+          runcmd:
+            - systemctl stop unattended-upgrades
+            - systemctl disable unattended-upgrades
+            - systemctl stop apt-daily.service
+            - systemctl disable apt-daily.service
+            - systemctl stop apt-daily.timer
+            - systemctl disable apt-daily.timer
+            - systemctl stop apt-daily-upgrade.service
+            - systemctl disable apt-daily-upgrade.service
+            - systemctl stop apt-daily-upgrade.timer
+            - systemctl disable apt-daily-upgrade.timer
         api_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
         state: "{{ hetzner_server_state }}"
       register: server
