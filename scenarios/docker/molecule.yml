@@ -30,6 +30,7 @@ provisioner:
       remote_tmp: '/tmp/.ansible-${USER}/tmp'
       callback_result_format: yaml
       vault_password_file: ${CI_PROJECT_DIR}/.vault
+      roles_path: ${CI_PROJECT_DIR}/..
     diff:
       always: true
     callback_profile_tasks:
