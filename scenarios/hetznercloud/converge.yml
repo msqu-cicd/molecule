@@ -22,17 +22,6 @@
       tags:
         - molecule-idempotence-notest
 
-    - name: Deploy SSH-Keys to remote host
-      ansible.posix.authorized_key:
-        user: root
-        state: present
-        key: "{{ item }}"
-      loop:
-        - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJalOxUjdPZ71xxMnv1Kvi4CuxoA02XtPli/UM4Li/nL michael@eifel"
-        - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKQ8jd7nJbYSs1ErDmrKI1QU9g4ddXQjxar0f3ScigHI Molecule"
-      tags:
-        - molecule-idempotence-notest
-
     - name: Set facts
       ansible.builtin.set_fact:
         ansible_user: "{{ ansible_env.USER }}"
