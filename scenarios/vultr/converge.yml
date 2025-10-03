@@ -5,7 +5,7 @@
   vars:
     converge_override_file: "{{ lookup('ansible.builtin.first_found', [playbook_dir + '/converge_override.yml'], errors='ignore') or '' }}"
   pre_tasks:
-    - name: update APT Cache
+    - name: Update APT Cache
       ansible.builtin.apt:
         update_cache: yes
         cache_valid_time: 600
@@ -22,37 +22,27 @@
       tags:
         - molecule-idempotence-notest
 
-    - name: Deploy SSH-Keys to remote host
-      ansible.posix.authorized_key:
-        user: root
-        state: present
-        key: "{{ item }}"
-      loop:
-        - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJalOxUjdPZ71xxMnv1Kvi4CuxoA02XtPli/UM4Li/nL michael@eifel"
-        - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKQ8jd7nJbYSs1ErDmrKI1QU9g4ddXQjxar0f3ScigHI Molecule"
-      tags:
-        - molecule-idempotence-notest
-
-    - name: set ansible_user
+    - name: Set facts
       ansible.builtin.set_fact:
         ansible_user: "{{ ansible_env.USER }}"
+        interface_main_ipv4: "{{ ansible_default_ipv4.address }}"
+        interface_main_ipv6: "{{ ansible_default_ipv6.address }}"
+        ipv6_enabled: "{% if lookup('ansible.builtin.file', '/proc/net/if_inet6' , errors='warn') %}true{% else %}false{% endif %}"
 
-    - name: Check cloud-init status
-      ansible.builtin.shell: systemctl is-active cloud-init.service || systemctl is-enabled cloud-init.service
-      failed_when: false
-      changed_when: false
-      become: true
-      register: cloud_init_enabled
-
-    - name: set cloud-init fact
+    # Always true for Hetzner...
+    - name: Set cloud-init fact
       ansible.builtin.set_fact:
-        cloud_init_managed: "{% if cloud_init_enabled.rc is defined and cloud_init_enabled.rc == 0 %}true{% else %}false{% endif %}"
+        cloud_init_managed: true
 
     - name: Include converge override tasks
       ansible.builtin.include_tasks: "{{ converge_override_file }}"
       when: converge_override_file is defined and converge_override_file != ""
 
   tasks:
-    - name: "{{ lookup('env', 'MOLECULE_PROJECT_DIRECTORY') | basename }}"
+    - name: Set role name
+      ansible.builtin.set_fact:
+        role_name: "{{ lookup('env', 'MOLECULE_ROLE_NAME') | default(lookup('env', 'CI_PROJECT_DIR') | basename, true) }}"
+
+    - name: Include role
       ansible.builtin.include_role:
-        name: "{{ lookup('env', 'MOLECULE_PROJECT_DIRECTORY') | basename }}"
+        name: "{{ role_name }}"
