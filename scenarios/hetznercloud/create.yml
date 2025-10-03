@@ -89,6 +89,12 @@
           #cloud-config
           package_update: false
           package_upgrade: false
+          users:
+            - name: root
+              lock_passwd: false
+              hashed_passwd: '$6$oJUDvM930K9.f5ov$CpD4WF/UgV9h8lcTpb8wYqAdasT/iT4oWsZGwvmbrbbeah7jlC8U/gQt53q02OVJAjJ4xxLtq8cAKYK/iy8LK0'
+          ssh_pwauth: true
+          disable_root: false
           apt:
             conf: |
               APT::Periodic::Update-Package-Lists "0";
