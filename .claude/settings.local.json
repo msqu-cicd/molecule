@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkpasswd:*)",
+      "Bash(ssh root@91.99.192.151 'cat /var/log/cloud-init.log')",
+      "Bash(ssh root@91.99.192.151 'cloud-init query userdata')",
+      "Bash(ssh root@91.99.192.151 \"grep ''^root:'' /etc/shadow\")",
+      "Bash(ssh root@91.99.192.151 'python3 -c \"\"import crypt; print(crypt.crypt(\\\"\"molecule\\\"\", \\\"\"\\$6\\$edVuae3.BvVElrRv\\$ntY3eMz9dHNjsiWw/tQ1zDWqqRuOVmyyUQWt6qFo894Q8ZNRRkx5DWMDn3MADy7yCLkMFeceVVYRCmGrvwNXI/\\\"\"))\"\"')",
+      "Bash(ssh root@91.99.192.151 'grep \"\"^PasswordAuthentication\"\" /etc/ssh/sshd_config')"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
