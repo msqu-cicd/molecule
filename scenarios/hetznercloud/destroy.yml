@@ -36,6 +36,7 @@
     - name: Gather hcloud server infos
       hetzner.hcloud.server_info:
         name: "{{ item.name }}"
+        api_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
       with_items: "{{ molecule_yml.platforms }}"
       register: hcloud_server_info_output
 
