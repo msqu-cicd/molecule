@@ -13,8 +13,8 @@ on:
     - cron: '0 2 * * 0'
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: msqu-devops/molecule-runner
+  REGISTRY: schmitzis
+  IMAGE_NAME: molecule-runner
 
 jobs:
   build:
@@ -44,12 +44,11 @@ jobs:
       - name: Set up Docker Buildx
         uses: https://github.com/docker/setup-buildx-action@v3
 
-      - name: Log in to Container Registry
+      - name: Login to Docker Hub
         uses: https://github.com/docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ secrets.DOCKERHUB_SCHMITZIS_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_SCHMITZIS_TOKEN }}
 
       - name: Extract metadata
         id: meta
@@ -73,7 +72,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
           cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
 
       - name: Image digest
         run: echo ${{ steps.meta.outputs.digest }}
