@@ -23,7 +23,6 @@ RUN apt-get update -qq && \
         wget \
         sudo \
         gnupg2 \
-        software-properties-common \
         build-essential \
         libffi-dev \
         libssl-dev \
