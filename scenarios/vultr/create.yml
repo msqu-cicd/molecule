@@ -131,12 +131,10 @@
           }
       with_items: "{{ server.results }}"
       register: instance_config_dict
-      when: server.changed | bool
 
     - name: Convert instance config dict to a list
       ansible.builtin.set_fact:
         instance_conf: "{{ instance_config_dict.results | map(attribute='ansible_facts.instance_conf_dict') | list }}"
-      when: server.changed | bool
 
     - name: Dump instance config
       ansible.builtin.copy:
@@ -145,7 +143,6 @@
 
           {{ instance_conf | to_json | from_json | to_yaml }}
         dest: "{{ molecule_instance_config }}"
-      when: server.changed | bool
 
     - name: Wait for SSH
       ansible.builtin.wait_for:
