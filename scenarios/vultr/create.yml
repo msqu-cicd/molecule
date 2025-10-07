@@ -147,6 +147,11 @@
         dest: "{{ molecule_instance_config }}"
       when: instance_conf is defined and instance_conf | length > 0
 
+    - name: Check if instance config exists
+      ansible.builtin.stat:
+        path: "{{ molecule_instance_config }}"
+      register: instance_config_stat
+
     - name: Wait for SSH
       ansible.builtin.wait_for:
         port: "{{ ssh_port }}"
@@ -154,4 +159,4 @@
         search_regex: SSH
         delay: 10
       with_items: "{{ lookup('file', molecule_instance_config) | from_yaml }}"
-      when: instance_conf is defined and instance_conf | length > 0
+      when: instance_config_stat.stat.exists
