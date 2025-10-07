@@ -123,7 +123,6 @@
         region: "{{ item.region }}"
         api_key: "{{ lookup('env', 'VULTR_API_KEY') }}"
         ssh_keys:
-          - "michael@eifel"
           - "{{ final_ssh_key_name }}"
         state: "{{ vultr_server_state }}"
       register: server
