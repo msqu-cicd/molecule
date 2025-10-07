@@ -127,14 +127,16 @@
             "user": "{{ ssh_user }}",
             "port": "{{ ssh_port }}",
             "identity_file": "{{ final_ssh_key_path }}",
-            "networks": "{{ item.item.item.networks | default({}) | dict2items(key_name='name', value_name='data') }}",
+            "networks": "{{ item.item.networks | default({}) | dict2items(key_name='name', value_name='data') }}",
           }
       with_items: "{{ server.results }}"
       register: instance_config_dict
+      when: item.vultr_instance | default({}) | length > 0
 
     - name: Convert instance config dict to a list
       ansible.builtin.set_fact:
-        instance_conf: "{{ instance_config_dict.results | map(attribute='ansible_facts.instance_conf_dict') | list }}"
+        instance_conf: "{{ instance_config_dict.results | selectattr('ansible_facts', 'defined') | map(attribute='ansible_facts.instance_conf_dict') | list }}"
+      when: instance_config_dict.results | selectattr('ansible_facts', 'defined') | list | length > 0
 
     - name: Dump instance config
       ansible.builtin.copy:
@@ -143,6 +145,7 @@
 
           {{ instance_conf | to_json | from_json | to_yaml }}
         dest: "{{ molecule_instance_config }}"
+      when: instance_conf is defined and instance_conf | length > 0
 
     - name: Wait for SSH
       ansible.builtin.wait_for:
@@ -151,3 +154,4 @@
         search_regex: SSH
         delay: 10
       with_items: "{{ lookup('file', molecule_instance_config) | from_yaml }}"
+      when: instance_conf is defined and instance_conf | length > 0
