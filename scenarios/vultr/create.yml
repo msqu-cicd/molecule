@@ -50,7 +50,7 @@
         - name: Register the SSH key facts
           ansible.builtin.set_fact:
             existing_ssh_key_name: "molecule"
-            generated_public_ssh_key: "{{ lookup('ansible.builtin.file', ssh_id_path + '.pub') }}"
+            generated_public_ssh_key: "{{ lookup('ansible.builtin.file', ssh_id_path + '.pub') | trim }}"
 
         - name: Register SSH key for test instance(s)
           vultr.cloud.ssh_key:
@@ -103,23 +103,11 @@
       vultr.cloud.instance:
         label: "{{ item.name }}"
         hostname: "{{ item.name }}"
-        user_data: |
-          #cloud-config
-          package_update: false
-          package_upgrade: false
-          users:
-            - name: root
-              lock_passwd: false
-              hashed_passwd: '$6$oJUDvM930K9.f5ov$CpD4WF/UgV9h8lcTpb8wYqAdasT/iT4oWsZGwvmbrbbeah7jlC8U/gQt53q02OVJAjJ4xxLtq8cAKYK/iy8LK0'
-          ssh_pwauth: true
-          disable_root: false
         os: "{{ item.os }}"
         enable_ipv6: yes
         plan: "{{ item.plan }}"
         backups: false
         ddos_protection: false
-        vpcs:
-          - molecule
         region: "{{ item.region }}"
         api_key: "{{ lookup('env', 'VULTR_API_KEY') }}"
         ssh_keys:
