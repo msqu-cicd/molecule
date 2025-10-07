@@ -9,26 +9,6 @@
     ssh_user: root
     ssh_id_path: "~/.ssh/id_ed25519"
   tasks:
-    - name: Gather Vultr plans information
-      vultr.cloud.plan_info:
-        api_key: "{{ lookup('env', 'VULTR_API_KEY') }}"
-      register: vultr_plan_info
-
-    - name: Print the gathered information
-      ansible.builtin.debug:
-        var: vultr_plan_info.vultr_plan_info
-      no_log: "{{ ansible_verbosity < 2 }}"
-
-    - name: Gather Vultr regions information
-      vultr.cloud.region_info:
-        api_key: "{{ lookup('env', 'VULTR_API_KEY') }}"
-      register: vultr_region_info
-
-    - name: Print the gathered information
-      ansible.builtin.debug:
-        var: vultr_region_info.vultr_region_info
-      no_log: "{{ ansible_verbosity < 2 }}"
-
     - name: Check if SSH key already exists
       ansible.builtin.stat:
         path: "{{ ssh_id_path }}"
@@ -40,6 +20,7 @@
       register: id_ed25519_pub_stat
 
     - name: Use existing SSH key
+      when: id_ed25519_stat.stat.exists
       block:
         - name: Create public SSH key
           ansible.builtin.shell: |
@@ -59,9 +40,9 @@
             api_key: "{{ lookup('env', 'VULTR_API_KEY') }}"
             state: present
           ignore_errors: true
-      when: id_ed25519_stat.stat.exists
 
     - name: Create new SSH key
+      when: not id_ed25519_stat.stat.exists
       block:
         - name: Create SSH key
           community.crypto.openssh_keypair:
@@ -80,13 +61,18 @@
             ssh_key: "{{ generated_ssh_key.public_key }}"
             api_key: "{{ lookup('env', 'VULTR_API_KEY') }}"
             state: present
-      when: not id_ed25519_stat.stat.exists
 
     - name: Set vultr facts
       ansible.builtin.set_fact:
         vultr_server_state: "{{ lookup('ansible.builtin.env', 'VULTR_SERVER_STATE') or 'present' }}"
         final_ssh_key_name: "{% if id_ed25519_stat.stat.exists %}{{ existing_ssh_key_name }}{% else %}{{ ssh_key_name }}{% endif %}"
         final_ssh_key_path: "{% if id_ed25519_stat.stat.exists %}~/.ssh/id_ed25519{% else %}{{ lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}/ssh_key{% endif %}"
+
+    - name: Print debug output
+      ansible.builtin.debug:
+        msg:
+          - "{{ vultr_server_state }}"
+          - "{{ final_ssh_key_name }}"
 
     - name: Create private network(s)
       vultr.cloud.vpc:
@@ -147,16 +133,19 @@
         dest: "{{ molecule_instance_config }}"
       when: instance_conf is defined and instance_conf | length > 0
 
-    - name: Check if instance config exists
-      ansible.builtin.stat:
-        path: "{{ molecule_instance_config }}"
-      register: instance_config_stat
+    - name: Dump instance config
+      ansible.builtin.debug:
+        msg: "content of instance config: {{ lookup('file', molecule_instance_config) | from_yaml }}"
+      when: instance_conf is defined and instance_conf | length > 0
 
     - name: Wait for SSH
       ansible.builtin.wait_for:
-        port: "{{ ssh_port }}"
         host: "{{ item.address }}"
+        port: "{{ item.port }}"
         search_regex: SSH
         delay: 10
-      with_items: "{{ lookup('file', molecule_instance_config) | from_yaml }}"
-      when: instance_config_stat.stat.exists
+        timeout: 320
+      loop: "{{ lookup('file', molecule_instance_config, errors='ignore') | default('[]', true) | from_yaml }}"
+      loop_control:
+        label: "{{ item.instance }}"
+      when: instance_conf is defined and instance_conf | length > 0
