@@ -102,7 +102,13 @@
       register: server
       with_items: "{{ molecule_yml.platforms }}"
 
-    - name: Populate instance config dict
+    - name: Gather instance information when already exists
+      vultr.cloud.instance_info:
+        api_key: "{{ lookup('env', 'VULTR_API_KEY') }}"
+      register: existing_instances
+      when: vultr_server_state == 'present'
+
+    - name: Populate instance config dict from created instances
       ansible.builtin.set_fact:
         instance_conf_dict:
           {
@@ -117,12 +123,39 @@
           }
       with_items: "{{ server.results }}"
       register: instance_config_dict
-      when: item.vultr_instance | default({}) | length > 0
+      when:
+        - item.vultr_instance | default({}) | length > 0
+        - item.changed | bool
+
+    - name: Populate instance config dict from existing instances
+      ansible.builtin.set_fact:
+        instance_conf_dict:
+          {
+            "instance": "{{ instance.label }}",
+            "ssh_key_name": "{{ final_ssh_key_name }}",
+            "address": "{{ instance.main_ip }}",
+            "region": "{{ instance.region }}",
+            "user": "{{ ssh_user }}",
+            "port": "{{ ssh_port }}",
+            "identity_file": "{{ final_ssh_key_path }}",
+            "networks": "{{ molecule_yml.platforms | selectattr('name', 'equalto', instance.label) | map(attribute='networks') | first | default({}) | dict2items(key_name='name', value_name='data') }}",
+          }
+      loop: "{{ existing_instances.vultr_instance_info | default([]) }}"
+      loop_control:
+        loop_var: instance
+        label: "{{ instance.label }}"
+      register: existing_instance_config_dict
+      when:
+        - existing_instances is defined
+        - existing_instances.vultr_instance_info is defined
+        - instance.label in (molecule_yml.platforms | map(attribute='name') | list)
 
     - name: Convert instance config dict to a list
       ansible.builtin.set_fact:
-        instance_conf: "{{ instance_config_dict.results | selectattr('ansible_facts', 'defined') | map(attribute='ansible_facts.instance_conf_dict') | list }}"
-      when: instance_config_dict.results | selectattr('ansible_facts', 'defined') | list | length > 0
+        instance_conf: "{{ (instance_config_dict.results | default([]) | selectattr('ansible_facts', 'defined') | map(attribute='ansible_facts.instance_conf_dict') | list) + (existing_instance_config_dict.results | default([]) | selectattr('ansible_facts', 'defined') | map(attribute='ansible_facts.instance_conf_dict') | list) }}"
+      when: >
+        (instance_config_dict.results | default([]) | selectattr('ansible_facts', 'defined') | list | length > 0) or
+        (existing_instance_config_dict.results | default([]) | selectattr('ansible_facts', 'defined') | list | length > 0)
 
     - name: Dump instance config
       ansible.builtin.copy:
