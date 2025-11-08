@@ -2,7 +2,7 @@ collections:
 - name: amazon.aws
   version: 10.1.2
 - name: ansible.netcommon
-  version: 8.1.0
+  version: 8.2.0
 - name: ansible.posix
   version: 2.1.0
 - name: ansible.utils
@@ -28,7 +28,7 @@ collections:
 - name: community.zabbix
   version: 4.1.1
 - name: hetzner.hcloud
-  version: 6.0.0
+  version: 6.1.0
 - name: kewlfft.aur
   version: 0.13.0
 - name: geerlingguy.mac
