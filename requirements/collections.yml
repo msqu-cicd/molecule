@@ -12,7 +12,7 @@ collections:
 - name: community.dns
   version: 3.4.0
 - name: community.docker
-  version: 5.0.2
+  version: 5.0.3
 - name: community.elastic
   version: 1.2.2
 - name: community.general
@@ -32,7 +32,7 @@ collections:
 - name: kewlfft.aur
   version: 0.13.0
 - name: geerlingguy.mac
-  version: 4.1.0
+  version: 4.2.0
 - name: bodsch.core
   version: 2.7.0
 - name: bodsch.scm
