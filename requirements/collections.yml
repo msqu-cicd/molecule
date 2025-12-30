@@ -8,15 +8,15 @@ collections:
 - name: ansible.utils
   version: 6.0.0
 - name: community.crypto
-  version: 3.0.5
+  version: 3.1.0
 - name: community.dns
-  version: 3.4.1
+  version: 3.4.2
 - name: community.docker
   version: 5.0.4
 - name: community.elastic
   version: 1.2.2
 - name: community.general
-  version: 12.1.0
+  version: 12.2.0
 - name: community.mysql
   version: 4.0.1
 - name: community.postgresql
@@ -36,7 +36,7 @@ collections:
 - name: bodsch.core
   version: 2.8.2
 - name: bodsch.scm
-  version: 1.7.0
+  version: 1.7.1
 - name: bodsch.systemd
   version: 1.4.0
 - name: vultr.cloud
