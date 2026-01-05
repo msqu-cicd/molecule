@@ -32,7 +32,7 @@ collections:
 - name: kewlfft.aur
   version: 0.13.0
 - name: geerlingguy.mac
-  version: 4.2.0
+  version: 5.0.0
 - name: bodsch.core
   version: 2.8.2
 - name: bodsch.scm
