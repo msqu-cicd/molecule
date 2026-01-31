@@ -3,11 +3,7 @@ exclude_paths:
   - .cache/
   - .github/
   - .gitlab-ci.yml
-
-parseable: true
-
 offline: true
-
 warn_list:
   - '106'
   - command-instead-of-module
