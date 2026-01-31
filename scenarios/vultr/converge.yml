@@ -24,7 +24,7 @@
 
     - name: Set facts
       ansible.builtin.set_fact:
-        ansible_user: "{{ ansible_env.USER }}"
+        ansible_user: "{{ ansible_facts['env']['USER'] }}"
         interface_main_ipv4: "{{ ansible_default_ipv4.address }}"
         interface_main_ipv6: "{{ ansible_default_ipv6.address }}"
         ipv6_enabled: "{% if lookup('ansible.builtin.file', '/proc/net/if_inet6' , errors='warn') %}true{% else %}false{% endif %}"

@@ -40,7 +40,7 @@
 
     - name: set ansible_user
       ansible.builtin.set_fact:
-        ansible_user: "{{ ansible_env.USER }}"
+        ansible_user: "{{ ansible_facts['env']['USER'] }}"
 
     - name: Check cloud-init status
       ansible.builtin.shell: systemctl is-active cloud-init.service || systemctl is-enabled cloud-init.service
