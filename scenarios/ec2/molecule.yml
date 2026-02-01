@@ -14,6 +14,8 @@ platforms:
     vpc_subnet_id: ${AWS_VPC_SUBNET_ID}
 provisioner:
   name: ansible
+  env:
+    GITHUB_TOKEN: ${GITHUB_TOKEN:-}
   config_options:
     defaults:
       bin_ansible_callbacks: yes

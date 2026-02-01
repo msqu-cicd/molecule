@@ -22,6 +22,8 @@ platforms:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
 provisioner:
   name: ansible
+  env:
+    GITHUB_TOKEN: ${GITHUB_TOKEN:-}
   config_options:
     defaults:
       bin_ansible_callbacks: yes

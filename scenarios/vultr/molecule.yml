@@ -13,6 +13,8 @@ platforms:
     vpc_cidr: ${INSTANCE_VPC_CIDR:-"172.16.0.0/24"}
 provisioner:
   name: ansible
+  env:
+    GITHUB_TOKEN: ${GITHUB_TOKEN:-}
   inventory:
     group_vars:
       all:
