@@ -171,14 +171,34 @@
         msg: "content of instance config: {{ lookup('file', molecule_instance_config) | from_yaml }}"
       when: instance_conf is defined and instance_conf | length > 0
 
-    - name: Wait for SSH
+    - name: Wait for SSH port to become available
       ansible.builtin.wait_for:
         host: "{{ item.address }}"
         port: "{{ item.port }}"
-        search_regex: SSH
-        delay: 10
-        timeout: 320
+        search_regex: OpenSSH
+        delay: 5
+        timeout: 90
       loop: "{{ lookup('file', molecule_instance_config, errors='ignore') | default('[]', true) | from_yaml }}"
       loop_control:
         label: "{{ item.instance }}"
+      when: instance_conf is defined and instance_conf | length > 0
+      retries: 3
+      delay: 10
+
+    - name: Test SSH connection
+      ansible.builtin.shell: >
+        ssh -o ConnectTimeout=10
+        -o StrictHostKeyChecking=no
+        -o UserKnownHostsFile=/dev/null
+        -o BatchMode=yes
+        -i {{ item.identity_file }}
+        {{ item.user }}@{{ item.address }} whoami
+      loop: "{{ lookup('file', molecule_instance_config, errors='ignore') | default('[]', true) | from_yaml }}"
+      loop_control:
+        label: "{{ item.instance }}"
+      register: ssh_test
+      retries: 30
+      delay: 10
+      until: ssh_test.rc == 0
+      changed_when: false
       when: instance_conf is defined and instance_conf | length > 0

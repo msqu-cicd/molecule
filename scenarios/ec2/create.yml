@@ -305,31 +305,35 @@
                    | from_json
                    | to_yaml }}
 
-        - name: Start SSH pollers
+        - name: Wait for SSH port to become available
           ansible.builtin.wait_for:
             host: "{{ item.address }}"
             port: "{{ item.port }}"
-            search_regex: SSH
-            delay: 10
-            timeout: 320
+            search_regex: OpenSSH
+            delay: 5
+            timeout: 90
           loop: "{{ instance_configs.results | map(attribute='ansible_facts.instance_config') | list }}"
           loop_control:
             label: "{{ item.instance }}"
-          register: ssh_wait_async
-          async: 300
-          poll: 0
+          retries: 3
+          delay: 10
 
-        - name: Wait for SSH
-          ansible.builtin.async_status:
-            jid: "{{ item.ansible_job_id }}"
-          loop: "{{ ssh_wait_async.results }}"
+        - name: Test SSH connection
+          ansible.builtin.shell: >
+            ssh -o ConnectTimeout=10
+            -o StrictHostKeyChecking=no
+            -o UserKnownHostsFile=/dev/null
+            -o BatchMode=yes
+            -i {{ item.identity_file }}
+            {{ item.user }}@{{ item.address }} whoami
+          loop: "{{ instance_configs.results | map(attribute='ansible_facts.instance_config') | list }}"
           loop_control:
-            index_var: index
-            label: "{{ platforms[index].name }}"
-          register: ssh_wait
-          until: ssh_wait_async is finished
-          retries: 300
-          delay: 1
+            label: "{{ item.instance }}"
+          register: ssh_test
+          retries: 30
+          delay: 10
+          until: ssh_test.rc == 0
+          changed_when: false
 
         - name: Wait for boot process to finish
           ansible.builtin.pause:
