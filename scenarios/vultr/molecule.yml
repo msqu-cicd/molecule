@@ -13,6 +13,10 @@ platforms:
     vpc_cidr: ${INSTANCE_VPC_CIDR:-"172.16.0.0/24"}
 provisioner:
   name: ansible
+  inventory:
+    group_vars:
+      all:
+        ansible_python_interpreter: /usr/bin/python3
   config_options:
     defaults:
       bin_ansible_callbacks: yes
