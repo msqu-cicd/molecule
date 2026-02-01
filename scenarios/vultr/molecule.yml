@@ -14,7 +14,7 @@ platforms:
 provisioner:
   name: ansible
   env:
-    GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+    GITHUB_TOKEN: "${GITHUB_TOKEN:-}"
   inventory:
     group_vars:
       all:

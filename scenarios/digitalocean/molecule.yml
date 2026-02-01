@@ -16,7 +16,7 @@ platforms:
 provisioner:
   name: ansible
   env:
-    GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+    GITHUB_TOKEN: "${GITHUB_TOKEN:-}"
   config_options:
     defaults:
       bin_ansible_callbacks: yes
