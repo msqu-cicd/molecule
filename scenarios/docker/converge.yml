@@ -11,14 +11,14 @@
         cache_valid_time: 600
       register: result
       until: result is succeeded
-      when: ansible_facts["os_family"] == 'Debian'
+      when: ansible_facts['os_family'] == 'Debian'
       tags:
         - molecule-idempotence-notest
 
     - name: Run the equivalent of "pacman -Sy" as a separate step
       community.general.pacman:
         update_cache: yes
-      when: ansible_facts["os_family"] == 'Archlinux'
+      when: ansible_facts['os_family'] == 'Archlinux'
       tags:
         - molecule-idempotence-notest
 
