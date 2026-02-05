@@ -1,8 +1,8 @@
 collections:
 - name: amazon.aws
-  version: 11.0.0
+  version: 11.1.0
 - name: ansible.netcommon
-  version: 8.2.1
+  version: 8.4.0
 - name: ansible.posix
   version: 2.1.0
 - name: ansible.utils
@@ -22,7 +22,7 @@ collections:
 - name: community.postgresql
   version: 4.2.0
 - name: kubernetes.core
-  version: 6.2.0
+  version: 6.3.0
 - name: containers.podman
   version: 1.19.0
 - name: community.zabbix
