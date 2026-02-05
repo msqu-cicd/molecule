@@ -74,58 +74,25 @@
           - "{{ hetzner_server_state }}"
           - "{{ final_ssh_key_name }}"
 
-    - name: Create molecule instance(s)
-      hetzner.hcloud.server:
-        name: "{{ item.name }}"
-        server_type: "{{ item.server_type }}"
-        ssh_keys:
-          - "{{ final_ssh_key_name }}"
-          - "michael@eifel"
-        image: "{{ item.image }}"
-        location: "{{ item.location | default(omit) }}"
-        datacenter: "{{ item.datacenter | default(omit) }}"
-        labels: "{{ item.labels | default({}) }}"
-        user_data: |
-          #cloud-config
-          package_update: false
-          package_upgrade: false
-          users:
-            - name: root
-              lock_passwd: false
-              hashed_passwd: '$6$oJUDvM930K9.f5ov$CpD4WF/UgV9h8lcTpb8wYqAdasT/iT4oWsZGwvmbrbbeah7jlC8U/gQt53q02OVJAjJ4xxLtq8cAKYK/iy8LK0'
-          ssh_pwauth: true
-          disable_root: false
-          apt:
-            conf: |
-              APT::Periodic::Update-Package-Lists "0";
-              APT::Periodic::Download-Upgradeable-Packages "0";
-              APT::Periodic::AutocleanInterval "0";
-              APT::Periodic::Unattended-Upgrade "0";
-          runcmd:
-            - systemctl stop unattended-upgrades
-            - systemctl disable unattended-upgrades
-            - systemctl stop apt-daily.service
-            - systemctl disable apt-daily.service
-            - systemctl stop apt-daily.timer
-            - systemctl disable apt-daily.timer
-            - systemctl stop apt-daily-upgrade.service
-            - systemctl disable apt-daily-upgrade.service
-            - systemctl stop apt-daily-upgrade.timer
-            - systemctl disable apt-daily-upgrade.timer
-        api_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
-        state: "{{ hetzner_server_state }}"
-      register: server
-      with_items: "{{ molecule_yml.platforms }}"
-      async: 7200
-      poll: 0
+    - name: Define server type fallbacks
+      ansible.builtin.set_fact:
+        server_type_fallbacks:
+          cax11: ['cax11', 'cax21', 'cx22']
+          cax21: ['cax21', 'cax31', 'cx32']
+          cax31: ['cax31', 'cax41', 'cx42']
 
-    - name: Wait for instance(s) creation to complete
-      ansible.builtin.async_status:
-        jid: "{{ item.ansible_job_id }}"
-      register: hetzner_jobs
-      until: hetzner_jobs.finished
-      retries: 300
-      with_items: "{{ server.results }}"
+    - name: Create molecule instance(s) with fallback
+      ansible.builtin.include_tasks:
+        file: create_server_with_fallback.yml
+      loop: "{{ molecule_yml.platforms }}"
+      loop_control:
+        loop_var: platform_item
+
+    - name: Set server results
+      ansible.builtin.set_fact:
+        server:
+          changed: true
+          results: "{{ server_creation_results | default([]) }}"
 
     - name: Create volume(s)
       hetzner.hcloud.volume:
@@ -228,7 +195,7 @@
             "volumes": "{{ item.item.item.volumes | default({}) }}",
             "networks": "{{ item.item.item.networks | default({}) | dict2items(key_name='name', value_name='data') }}",
           }
-      with_items: "{{ hetzner_jobs.results }}"
+      with_items: "{{ server.results }}"
       register: instance_config_dict
 
     - name: Convert instance config dict to a list

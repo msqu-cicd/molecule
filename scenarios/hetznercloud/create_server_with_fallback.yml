@@ -1,0 +1,80 @@
+---
+# Included task file to create a server with fallback server types
+- name: Get fallback types for {{ platform_item.name }}
+  ansible.builtin.set_fact:
+    current_fallback_types: "{{ server_type_fallbacks[platform_item.server_type] | default([platform_item.server_type]) }}"
+
+- name: Try creating server with fallback types
+  block:
+    - name: Attempt server creation with {{ current_type }}
+      hetzner.hcloud.server:
+        name: "{{ platform_item.name }}"
+        server_type: "{{ current_type }}"
+        ssh_keys:
+          - "{{ final_ssh_key_name }}"
+          - "michael@eifel"
+        image: "{{ platform_item.image }}"
+        location: "{{ platform_item.location | default(omit) }}"
+        datacenter: "{{ platform_item.datacenter | default(omit) }}"
+        labels: "{{ platform_item.labels | default({}) }}"
+        user_data: |
+          #cloud-config
+          package_update: false
+          package_upgrade: false
+          users:
+            - name: root
+              lock_passwd: false
+              hashed_passwd: '$6$oJUDvM930K9.f5ov$CpD4WF/UgV9h8lcTpb8wYqAdasT/iT4oWsZGwvmbrbbeah7jlC8U/gQt53q02OVJAjJ4xxLtq8cAKYK/iy8LK0'
+          ssh_pwauth: true
+          disable_root: false
+          apt:
+            conf: |
+              APT::Periodic::Update-Package-Lists "0";
+              APT::Periodic::Download-Upgradeable-Packages "0";
+              APT::Periodic::AutocleanInterval "0";
+              APT::Periodic::Unattended-Upgrade "0";
+          runcmd:
+            - systemctl stop unattended-upgrades
+            - systemctl disable unattended-upgrades
+            - systemctl stop apt-daily.service
+            - systemctl disable apt-daily.service
+            - systemctl stop apt-daily.timer
+            - systemctl disable apt-daily.timer
+            - systemctl stop apt-daily-upgrade.service
+            - systemctl disable apt-daily-upgrade.service
+            - systemctl stop apt-daily-upgrade.timer
+            - systemctl disable apt-daily-upgrade.timer
+        api_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
+        state: "{{ hetzner_server_state }}"
+      register: server_attempt
+      loop: "{{ current_fallback_types }}"
+      loop_control:
+        loop_var: current_type
+        label: "{{ platform_item.name }} ({{ current_type }})"
+      when: server_created is not defined or not server_created
+      ignore_errors: true
+
+    - name: Find first successful creation
+      ansible.builtin.set_fact:
+        server_created: true
+        successful_result:
+          hcloud_server: "{{ (server_attempt.results | selectattr('hcloud_server', 'defined') | list | first).hcloud_server }}"
+          item:
+            item: "{{ platform_item }}"
+          used_server_type: "{{ (server_attempt.results | selectattr('hcloud_server', 'defined') | list | first).current_type }}"
+      when: server_attempt.results | selectattr('hcloud_server', 'defined') | list | length > 0
+
+    - name: Display selected server type
+      ansible.builtin.debug:
+        msg: "Created {{ platform_item.name }} with server type: {{ successful_result.used_server_type }}"
+      when: successful_result is defined
+
+    - name: Append to server creation results
+      ansible.builtin.set_fact:
+        server_creation_results: "{{ (server_creation_results | default([])) + [successful_result] }}"
+      when: successful_result is defined
+
+    - name: Fail if no server type worked
+      ansible.builtin.fail:
+        msg: "Failed to create {{ platform_item.name }} with any server type: {{ current_fallback_types | join(', ') }}"
+      when: successful_result is not defined
