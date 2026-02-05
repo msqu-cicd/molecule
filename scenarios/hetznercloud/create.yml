@@ -74,25 +74,13 @@
           - "{{ hetzner_server_state }}"
           - "{{ final_ssh_key_name }}"
 
-    - name: Define server type fallbacks
+    - name: Define server type fallbacks and user_data
       ansible.builtin.set_fact:
         server_type_fallbacks:
           cax11: ['cax11', 'cax21', 'cx22']
           cax21: ['cax21', 'cax31', 'cx32']
           cax31: ['cax31', 'cax41', 'cx42']
-
-    - name: Try creating server with each fallback type
-      hetzner.hcloud.server:
-        name: "{{ molecule_yml.platforms[0].name }}"
-        server_type: "{{ server_type }}"
-        ssh_keys:
-          - "{{ final_ssh_key_name }}"
-          - "michael@eifel"
-        image: "{{ molecule_yml.platforms[0].image }}"
-        location: "{{ molecule_yml.platforms[0].location | default(omit) }}"
-        datacenter: "{{ molecule_yml.platforms[0].datacenter | default(omit) }}"
-        labels: "{{ molecule_yml.platforms[0].labels | default({}) }}"
-        user_data: |
+        server_user_data: |
           #cloud-config
           package_update: false
           package_upgrade: false
@@ -119,29 +107,19 @@
             - systemctl disable apt-daily-upgrade.service
             - systemctl stop apt-daily-upgrade.timer
             - systemctl disable apt-daily-upgrade.timer
-        api_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
-        state: "{{ hetzner_server_state }}"
-      register: server_result
+
+    - name: Try server types with fallback
+      ansible.builtin.include_tasks: try_server_types.yml
       loop: "{{ server_type_fallbacks[molecule_yml.platforms[0].server_type] | default([molecule_yml.platforms[0].server_type]) }}"
       loop_control:
-        loop_var: server_type
-        label: "{{ molecule_yml.platforms[0].name }} ({{ server_type }})"
-      ignore_errors: true
-
-    - name: Find successful server creation
-      ansible.builtin.set_fact:
-        server:
-          changed: true
-          results:
-            - hcloud_server: "{{ (server_result.results | selectattr('hcloud_server', 'defined') | first).hcloud_server }}"
-              item:
-                item: "{{ molecule_yml.platforms[0] }}"
-      when: server_result.results | selectattr('hcloud_server', 'defined') | list | length > 0
+        loop_var: current_server_type
+      vars:
+        platform: "{{ molecule_yml.platforms[0] }}"
 
     - name: Fail if no server type worked
       ansible.builtin.fail:
-        msg: "Failed to create server with any available type: {{ server_type_fallbacks[molecule_yml.platforms[0].server_type] | default([molecule_yml.platforms[0].server_type]) | join(', ') }}"
-      when: server is not defined
+        msg: "Failed to create server with any available type"
+      when: not (server_created | default(false))
 
     - name: Create volume(s)
       hetzner.hcloud.volume:

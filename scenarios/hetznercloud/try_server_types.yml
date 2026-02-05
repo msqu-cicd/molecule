@@ -1,0 +1,39 @@
+---
+# Try each server type until one succeeds
+- name: Try {{ current_server_type }}
+  when: not (server_created | default(false))
+  block:
+    - name: Create server with {{ current_server_type }}
+      hetzner.hcloud.server:
+        name: "{{ platform.name }}"
+        server_type: "{{ current_server_type }}"
+        ssh_keys:
+          - "{{ final_ssh_key_name }}"
+          - "michael@eifel"
+        image: "{{ platform.image }}"
+        location: "{{ platform.location | default(omit) }}"
+        datacenter: "{{ platform.datacenter | default(omit) }}"
+        labels: "{{ platform.labels | default({}) }}"
+        user_data: "{{ server_user_data }}"
+        api_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
+        state: "{{ hetzner_server_state }}"
+      register: server_attempt
+
+    - name: Mark success
+      ansible.builtin.set_fact:
+        server_created: true
+        server:
+          changed: true
+          results:
+            - hcloud_server: "{{ server_attempt.hcloud_server }}"
+              item:
+                item: "{{ platform }}"
+
+    - name: Log success
+      ansible.builtin.debug:
+        msg: "Created {{ platform.name }} with {{ current_server_type }}"
+
+  rescue:
+    - name: Log failure, trying next
+      ansible.builtin.debug:
+        msg: "{{ current_server_type }} unavailable, trying next..."
