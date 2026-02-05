@@ -81,18 +81,67 @@
           cax21: ['cax21', 'cax31', 'cx32']
           cax31: ['cax31', 'cax41', 'cx42']
 
-    - name: Create molecule instance(s) with fallback
-      ansible.builtin.include_tasks:
-        file: create_server_with_fallback.yml
-      loop: "{{ molecule_yml.platforms }}"
+    - name: Try creating server with each fallback type
+      hetzner.hcloud.server:
+        name: "{{ molecule_yml.platforms[0].name }}"
+        server_type: "{{ server_type }}"
+        ssh_keys:
+          - "{{ final_ssh_key_name }}"
+          - "michael@eifel"
+        image: "{{ molecule_yml.platforms[0].image }}"
+        location: "{{ molecule_yml.platforms[0].location | default(omit) }}"
+        datacenter: "{{ molecule_yml.platforms[0].datacenter | default(omit) }}"
+        labels: "{{ molecule_yml.platforms[0].labels | default({}) }}"
+        user_data: |
+          #cloud-config
+          package_update: false
+          package_upgrade: false
+          users:
+            - name: root
+              lock_passwd: false
+              hashed_passwd: '$6$oJUDvM930K9.f5ov$CpD4WF/UgV9h8lcTpb8wYqAdasT/iT4oWsZGwvmbrbbeah7jlC8U/gQt53q02OVJAjJ4xxLtq8cAKYK/iy8LK0'
+          ssh_pwauth: true
+          disable_root: false
+          apt:
+            conf: |
+              APT::Periodic::Update-Package-Lists "0";
+              APT::Periodic::Download-Upgradeable-Packages "0";
+              APT::Periodic::AutocleanInterval "0";
+              APT::Periodic::Unattended-Upgrade "0";
+          runcmd:
+            - systemctl stop unattended-upgrades
+            - systemctl disable unattended-upgrades
+            - systemctl stop apt-daily.service
+            - systemctl disable apt-daily.service
+            - systemctl stop apt-daily.timer
+            - systemctl disable apt-daily.timer
+            - systemctl stop apt-daily-upgrade.service
+            - systemctl disable apt-daily-upgrade.service
+            - systemctl stop apt-daily-upgrade.timer
+            - systemctl disable apt-daily-upgrade.timer
+        api_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
+        state: "{{ hetzner_server_state }}"
+      register: server_result
+      loop: "{{ server_type_fallbacks[molecule_yml.platforms[0].server_type] | default([molecule_yml.platforms[0].server_type]) }}"
       loop_control:
-        loop_var: platform_item
+        loop_var: server_type
+        label: "{{ molecule_yml.platforms[0].name }} ({{ server_type }})"
+      ignore_errors: true
 
-    - name: Set server results
+    - name: Find successful server creation
       ansible.builtin.set_fact:
         server:
           changed: true
-          results: "{{ server_creation_results | default([]) }}"
+          results:
+            - hcloud_server: "{{ (server_result.results | selectattr('hcloud_server', 'defined') | first).hcloud_server }}"
+              item:
+                item: "{{ molecule_yml.platforms[0] }}"
+      when: server_result.results | selectattr('hcloud_server', 'defined') | list | length > 0
+
+    - name: Fail if no server type worked
+      ansible.builtin.fail:
+        msg: "Failed to create server with any available type: {{ server_type_fallbacks[molecule_yml.platforms[0].server_type] | default([molecule_yml.platforms[0].server_type]) | join(', ') }}"
+      when: server is not defined
 
     - name: Create volume(s)
       hetzner.hcloud.volume:
