@@ -10,7 +10,7 @@
         cache_valid_time: 600
       register: result
       until: result is succeeded
-      when: ansible_os_family == 'Debian'
+      when: ansible_facts['os_family'] == 'Debian'
 
     - name: Deploy SSH-Keys to remote host
       ansible.posix.authorized_key:

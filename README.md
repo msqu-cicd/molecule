@@ -136,7 +136,7 @@ If you want to include tests which are not mandatory, mark them as `experimental
         cache_valid_time: 600
       register: result
       until: result is succeeded
-      when: ansible_os_family == 'Debian'
+      when: ansible_facts['os_family'] == 'Debian'
 
     # skip idempotence tests
     - name: Include Example install role
@@ -174,7 +174,7 @@ Create `molecule/default/converge.yml` inside the repository with following cont
         cache_valid_time: 600
       register: result
       until: result is succeeded
-      when: ansible_os_family == 'Debian'
+      when: ansible_facts['os_family'] == 'Debian'
 
   tasks:
     # skip idempotence tests
