@@ -10,13 +10,13 @@ collections:
 - name: community.crypto
   version: 3.1.1
 - name: community.dns
-  version: 3.5.1
+  version: 3.5.2
 - name: community.docker
   version: 5.0.6
 - name: community.elastic
   version: 1.3.0
 - name: community.general
-  version: 12.3.0
+  version: 12.4.0
 - name: community.mysql
   version: 4.1.0
 - name: community.postgresql
