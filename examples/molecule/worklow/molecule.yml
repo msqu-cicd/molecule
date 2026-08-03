@@ -218,6 +218,7 @@ jobs:
 
       - name: Cleanup workspace
         if: always()
+        shell: bash
         run: |
           cd ${GITHUB_WORKSPACE}
           shopt -s dotglob
@@ -371,6 +372,7 @@ jobs:
 
       - name: Cleanup workspace
         if: always()
+        shell: bash
         run: |
           cd ${GITHUB_WORKSPACE}
           shopt -s dotglob
@@ -520,6 +522,7 @@ jobs:
 
       - name: Cleanup workspace
         if: always()
+        shell: bash
         run: |
           cd ${GITHUB_WORKSPACE}
           shopt -s dotglob
@@ -670,6 +673,7 @@ jobs:
 
       - name: Cleanup workspace
         if: always()
+        shell: bash
         run: |
           cd ${GITHUB_WORKSPACE}
           shopt -s dotglob
