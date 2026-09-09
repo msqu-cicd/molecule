@@ -53,19 +53,6 @@
       "semanticCommitScope": "ansible"
     }
   ],
-  "customManagers": [
-    {
-      "customType": "regex",
-      "managerFilePatterns": [
-        "/.*y[a]?ml$/"
-      ],
-      "matchStrings": [
-        "refs/tags/(?<depName>.*)/(?<currentValue>.*)"
-      ],
-      "datasourceTemplate": "github-tags",
-      "depNameTemplate": "<org_name>/{{{depName}}}"
-    }
-  ],
   "ansible-galaxy": {
     "enabled": true,
     "managerFilePatterns": [
