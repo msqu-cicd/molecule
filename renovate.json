@@ -1,49 +1,12 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended",
-    "security:openssf-scorecard"
+    "local>renovatebot/renovatebot"
   ],
-  "configMigration": true,
-  "addLabels": [
-    "renovate",
-    "{{{manager}}}"
-  ],
-  "automergeStrategy": "merge-commit",
   "prHourlyLimit": 10,
   "prConcurrentLimit": 20,
   "branchConcurrentLimit": 20,
   "packageRules": [
-    {
-      "matchDatasources": [
-        "docker"
-      ],
-      "automerge": true,
-      "matchUpdateTypes": [
-        "digest"
-      ]
-    },
-    {
-      "matchManagers": [
-        "dockerfile"
-      ],
-      "matchUpdateTypes": [
-        "patch"
-      ],
-      "automerge": true
-    },
-    {
-      "matchManagers": [
-        "github-actions"
-      ],
-      "automerge": true,
-      "matchUpdateTypes": [
-        "minor",
-        "patch",
-        "pin",
-        "digest"
-      ]
-    },
     {
       "matchManagers": [
         "ansible-galaxy"
@@ -58,7 +21,5 @@
     "managerFilePatterns": [
       "/requirements/collections\\.ya?ml$/"
     ]
-  },
-  "osvVulnerabilityAlerts": true,
-  "dependencyDashboardOSVVulnerabilitySummary": "all"
+  }
 }
