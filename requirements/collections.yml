@@ -20,7 +20,7 @@ collections:
 - name: community.mysql
   version: 5.0.2
 - name: community.postgresql
-  version: 4.2.0
+  version: 5.0.0
 - name: kubernetes.core
   version: 6.5.0
 - name: containers.podman
