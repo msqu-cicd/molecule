@@ -1,39 +1,39 @@
 ---
-# Try each server type until one succeeds
-- name: Try {{ current_server_type }}
-  when: not (server_created | default(false))
+# Try each server type until one succeeds for a given platform
+- name: Try {{ current_server_type }} for {{ current_platform.name }}
+  when: current_platform.name not in (created_servers | default({}))
   block:
-    - name: Create server with {{ current_server_type }}
+    - name: Create {{ current_platform.name }} with {{ current_server_type }}
       hetzner.hcloud.server:
-        name: "{{ platform.name }}"
+        name: "{{ current_platform.name }}"
         server_type: "{{ current_server_type }}"
         ssh_keys:
           - "{{ final_ssh_key_name }}"
           - "michael@eifel"
-        image: "{{ platform.image }}"
-        location: "{{ platform.location | default(omit) }}"
-        datacenter: "{{ platform.datacenter | default(omit) }}"
-        labels: "{{ platform.labels | default({}) }}"
+        image: "{{ current_platform.image }}"
+        location: "{{ current_platform.location | default(omit) }}"
+        datacenter: "{{ current_platform.datacenter | default(omit) }}"
+        labels: "{{ current_platform.labels | default({}) }}"
         user_data: "{{ server_user_data }}"
         api_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
         state: "{{ hetzner_server_state }}"
       register: server_attempt
 
-    - name: Mark success
+    - name: Record created server
       ansible.builtin.set_fact:
-        server_created: true
-        server:
-          changed: true
-          results:
-            - hcloud_server: "{{ server_attempt.hcloud_server }}"
-              item:
-                item: "{{ platform }}"
+        created_servers: >-
+          {{ created_servers | default({}) | combine({
+            current_platform.name: {
+              'hcloud_server': server_attempt.hcloud_server,
+              'platform': current_platform
+            }
+          }) }}
 
     - name: Log success
       ansible.builtin.debug:
-        msg: "Created {{ platform.name }} with {{ current_server_type }}"
+        msg: "Created {{ current_platform.name }} with {{ current_server_type }}"
 
   rescue:
     - name: Log failure, trying next
       ansible.builtin.debug:
-        msg: "{{ current_server_type }} unavailable, trying next..."
+        msg: "{{ current_server_type }} unavailable for {{ current_platform.name }}, trying next..."

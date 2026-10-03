@@ -65,19 +65,17 @@
     - name: Set hetzner facts
       ansible.builtin.set_fact:
         hetzner_server_state: rebuild
-        final_ssh_key_name: "{% if id_ed25519_stat.stat.exists %}{{ existing_ssh_key_name }}{% else %}{{ ssh_key_name }}{% endif %}"
-        final_ssh_key_path: "{% if id_ed25519_stat.stat.exists %}~/.ssh/id_ed25519{% else %}{{ lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}/ssh_key{% endif %}"
-
-    - name: Print debug output
-      ansible.builtin.debug:
-        msg:
-          - "{{ hetzner_server_state }}"
-          - "{{ final_ssh_key_name }}"
+        final_ssh_key_name: >-
+          {% if id_ed25519_stat.stat.exists %}{{ existing_ssh_key_name }}{% else %}{{ ssh_key_name }}{% endif %}
+        final_ssh_key_path: "{{ ssh_id_path }}"
 
     - name: Define server type fallbacks and user_data
       ansible.builtin.set_fact:
         server_type_fallbacks:
           cx23: ['cx23', 'cx33', 'cx43']
+          cax11: ['cax11', 'cax21', 'cx22']
+          cax21: ['cax21', 'cax31', 'cx32']
+          cax31: ['cax31', 'cax41', 'cx42']
         server_user_data: |
           #cloud-config
           package_update: false
@@ -106,18 +104,30 @@
             - systemctl stop apt-daily-upgrade.timer
             - systemctl disable apt-daily-upgrade.timer
 
-    - name: Try server types with fallback
-      ansible.builtin.include_tasks: try_server_types.yml
-      loop: "{{ server_type_fallbacks[molecule_yml.platforms[0].server_type] | default([molecule_yml.platforms[0].server_type]) }}"
-      loop_control:
-        loop_var: current_server_type
-      vars:
-        platform: "{{ molecule_yml.platforms[0] }}"
+    - name: Initialize created_servers dict
+      ansible.builtin.set_fact:
+        created_servers: {}
 
-    - name: Fail if no server type worked
+    - name: Try server types with fallback for each platform
+      ansible.builtin.include_tasks: try_server_types.yml
+      loop: >-
+        {{ molecule_yml.platforms | product(
+             server_type_fallbacks[molecule_yml.platforms[0].server_type]
+             | default([molecule_yml.platforms[0].server_type])
+           ) | list }}
+      loop_control:
+        loop_var: _platform_type
+      vars:
+        current_platform: "{{ _platform_type[0] }}"
+        current_server_type: "{{ _platform_type[1] }}"
+
+    - name: Fail if not all servers were created
       ansible.builtin.fail:
-        msg: "Failed to create server with any available type"
-      when: not (server_created | default(false))
+        msg: "Failed to create server {{ item.name }}"
+      loop: "{{ molecule_yml.platforms }}"
+      loop_control:
+        label: "{{ item.name }}"
+      when: item.name not in created_servers
 
     - name: Create volume(s)
       hetzner.hcloud.volume:
@@ -207,29 +217,28 @@
       until: hcloud_server_network_result is not failed
 
     - name: Populate instance config dict
-      when: server.changed | bool
       ansible.builtin.set_fact:
         instance_conf_dict:
           {
-            "instance": "{{ item.hcloud_server.name }}",
+            "instance": "{{ item.value.hcloud_server.name }}",
             "ssh_key_name": "{{ final_ssh_key_name }}",
-            "address": "{{ item.hcloud_server.ipv4_address }}",
+            "address": "{{ item.value.hcloud_server.ipv4_address }}",
             "user": "{{ ssh_user }}",
             "port": "{{ ssh_port }}",
             "identity_file": "{{ final_ssh_key_path }}",
-            "volumes": "{{ item.item.item.volumes | default({}) }}",
-            "networks": "{{ item.item.item.networks | default({}) | dict2items(key_name='name', value_name='data') }}",
+            "volumes": "{{ item.value.platform.volumes | default({}) }}",
+            "networks": "{{ item.value.platform.networks | default({}) | dict2items(key_name='name', value_name='data') }}",
           }
-      with_items: "{{ server.results }}"
+      loop: "{{ created_servers | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
       register: instance_config_dict
 
     - name: Convert instance config dict to a list
-      when: server.changed | bool
       ansible.builtin.set_fact:
         instance_conf: "{{ instance_config_dict.results | map(attribute='ansible_facts.instance_conf_dict') | list }}"
 
     - name: Dump instance config
-      when: server.changed | bool
       ansible.builtin.copy:
         content: |
           # Molecule managed
