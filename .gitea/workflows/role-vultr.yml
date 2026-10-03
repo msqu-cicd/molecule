@@ -1,0 +1,285 @@
+# Reusable molecule workflow for Ansible roles (vultr scenario).
+# Called from each role's .gitea/workflows/molecule.yml; see README.md for the caller template.
+name: Molecule (vultr)
+
+on:
+  workflow_call:
+    inputs:
+      force_run:
+        description: Run the tests even if no relevant files changed ('true'/'false')
+        type: string
+        default: 'false'
+      args:
+        description: Additional arguments passed to molecule test
+        type: string
+        default: ''
+      molecule_debug:
+        description: Open a tmate debugging session before the tests ('true'/'false')
+        type: string
+        default: 'false'
+      distro:
+        description: Vultr OS name for the integration job
+        type: string
+        default: Arch Linux x64
+      instance_size:
+        description: Server type/plan, empty uses the scenario default
+        type: string
+        default: ''
+      molecule_ref:
+        description: Ref of CICD/molecule to take the scenario from
+        type: string
+        default: main
+
+jobs:
+  changes:
+    runs-on: ubuntu-26.04
+    outputs:
+      any_modified: ${{ steps.changed.outputs.any_modified }}
+    steps:
+      - name: Checkout repository
+        uses: https://github.com/actions/checkout@v7
+
+      # any_modified also counts deleted files (any_changed does not)
+      - id: changed
+        uses: https://github.com/tj-actions/changed-files@v47
+        with:
+          files_ignore: |
+            .ansible-lint
+            .gitea/**
+            .github/**
+            .yamllint
+            Makefile
+            meta/main.yml
+            README.md
+            renovate.json
+
+  lint:
+    runs-on: molecule
+    container:
+      image: ghcr.io/msqu-devops/molecule:runner
+    needs: changes
+    if: needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true'
+    steps:
+      - name: Checkout repository
+        uses: https://github.com/actions/checkout@v7
+
+      - name: Ansible Lint
+        run: ansible-lint -c .ansible-lint .
+
+      - name: Yaml Lint
+        run: yamllint -f colored .
+
+  molecule-integration:
+    runs-on: molecule
+    container:
+      image: ghcr.io/msqu-devops/molecule:runner
+    needs: [changes, lint]
+    if: (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true')
+    env:
+      TEST_TYPE: integration
+      VULTR_SERVER_STATE: present
+      MOLECULE_DISTRO: ${{ inputs.distro }}
+      MOLECULE_SCENARIO_NAME: vultr
+      INSTANCE_SIZE: ${{ inputs.instance_size }}
+    steps:
+      - name: Checkout repository
+        uses: https://github.com/actions/checkout@v7
+
+      - name: Set environment variables
+        run: |
+          {
+            echo "CI_HOSTNAME=$(echo '${{ env.MOLECULE_DISTRO }}' | tr -dc '[:alnum:]\n\r' | tr '[:upper:]' '[:lower:]')"
+            echo "CI_PROJECT_NAME_MOLECULE=$(echo ${GITHUB_REPOSITORY#*/} | tr '_' '-')"
+            echo "CI_PROJECT_DIR=$GITHUB_WORKSPACE"
+          } >> $GITHUB_ENV
+
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh/
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keygen -y -f ~/.ssh/id_ed25519 > ~/.ssh/id_ed25519.pub
+          echo "SSH Key Fingerprint: $(ssh-keygen -l -E md5 -f ~/.ssh/id_ed25519)"
+          cat > ~/.ssh/config << EOF
+          Host *
+            StrictHostKeyChecking no
+            UserKnownHostsFile=/dev/null
+          EOF
+
+      - name: Checkout infra repository
+        uses: https://github.com/actions/checkout@v7
+        with:
+          github-server-url: https://git.msqu.de
+          repository: infrastructure/infra
+          token: '${{ secrets.CI_RUNNER_PAT }}'
+          path: git_infra
+          ref: main
+          sparse-checkout: |
+            group_vars/
+
+      - name: Checkout molecule scenarios
+        uses: https://github.com/actions/checkout@v7
+        with:
+          github-server-url: https://git.msqu.de
+          repository: cicd/molecule
+          token: '${{ secrets.CI_RUNNER_PAT }}'
+          path: git_molecule
+          ref: ${{ inputs.molecule_ref }}
+          sparse-checkout: |
+            scenarios/vultr
+
+      - name: Prepare Ansible Vault
+        env:
+          ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
+        run: printf '%s\n' "$ANSIBLE_VAULT_PASSWORD" > "$GITHUB_WORKSPACE/.vault"
+
+      - name: Setup molecule scenario
+        run: |
+          mkdir -p ${GITHUB_WORKSPACE}/molecule/default
+          rsync -avzh --ignore-existing --ignore-errors \
+            git_molecule/scenarios/vultr/ \
+            ${GITHUB_WORKSPACE}/molecule/default/
+
+      - name: Configure integration test variables
+        run: |
+          rsync -aP git_infra/group_vars ${GITHUB_WORKSPACE}/molecule/default/
+
+      - name: Setup debugging session
+        if: inputs.molecule_debug == 'true'
+        uses: https://github.com/mxschmitt/action-tmate@v3
+        with:
+          limit-access-to-actor: true
+
+      - name: Run Molecule integration tests
+        run: molecule test ${{ inputs.args }}
+        env:
+          ANSIBLE_FORCE_COLOR: '1'
+          ANSIBLE_VERBOSITY: '1'
+          CI_JOB_ID: ${{ github.run_id }}
+          GITEA_TOKEN: ${{ secrets.CI_RUNNER_PAT }}
+          GITHUB_TOKEN: ${{ secrets.CI_RUNNER_PAT_GITHUB }}
+          MOLECULE_DEBUG: ${{ inputs.molecule_debug }}
+          PY_COLORS: '1'
+          VULTR_API_KEY: ${{ secrets.VULTR_API_KEY }}
+          ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
+
+      - name: Cleanup workspace
+        if: always()
+        shell: bash
+        run: |
+          cd ${GITHUB_WORKSPACE}
+          shopt -s dotglob
+          rm -rf *
+
+  # Runs after all test jobs, also after failures and cancellations: deletes leftover servers
+  # (and, via the role's cleanup.yml, their DNS records) instead of leaving them stopped
+  molecule-cleanup:
+    runs-on: molecule
+    container:
+      image: ghcr.io/msqu-devops/molecule:runner
+    if: always()
+    needs: [molecule-integration]
+    env:
+      MOLECULE_SCENARIO_NAME: vultr
+      MOLECULE_DISTRO: ${{ inputs.distro }}
+      VULTR_SERVER_STATE: absent
+    steps:
+      - name: Checkout repository
+        uses: https://github.com/actions/checkout@v7
+
+      - name: Set environment variables
+        run: |
+          {
+            echo "CI_HOSTNAME=$(echo '${{ env.MOLECULE_DISTRO }}' | tr -dc '[:alnum:]\n\r' | tr '[:upper:]' '[:lower:]')"
+            echo "CI_PROJECT_NAME_MOLECULE=$(echo ${GITHUB_REPOSITORY#*/} | tr '_' '-')"
+            echo "CI_PROJECT_DIR=$GITHUB_WORKSPACE"
+          } >> $GITHUB_ENV
+
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh/
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keygen -y -f ~/.ssh/id_ed25519 > ~/.ssh/id_ed25519.pub
+          echo "SSH Key Fingerprint: $(ssh-keygen -l -E md5 -f ~/.ssh/id_ed25519)"
+          cat > ~/.ssh/config << EOF
+          Host *
+            StrictHostKeyChecking no
+            UserKnownHostsFile=/dev/null
+          EOF
+
+      - name: Checkout molecule scenarios
+        uses: https://github.com/actions/checkout@v7
+        with:
+          github-server-url: https://git.msqu.de
+          repository: cicd/molecule
+          token: '${{ secrets.CI_RUNNER_PAT }}'
+          path: git_molecule
+          ref: ${{ inputs.molecule_ref }}
+          sparse-checkout: |
+            scenarios/vultr
+
+      - name: Prepare Ansible Vault
+        env:
+          ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
+        run: printf '%s\n' "$ANSIBLE_VAULT_PASSWORD" > "$GITHUB_WORKSPACE/.vault"
+
+      - name: Setup molecule scenario
+        run: |
+          mkdir -p ${GITHUB_WORKSPACE}/molecule/default
+          rsync -avzh --ignore-existing --ignore-errors \
+            git_molecule/scenarios/vultr/ \
+            ${GITHUB_WORKSPACE}/molecule/default/
+
+      - name: Destroy leftover molecule resources
+        continue-on-error: true
+        run: molecule destroy || echo "Cleanup failed or no resources to destroy"
+        env:
+          VULTR_API_KEY: ${{ secrets.VULTR_API_KEY }}
+          ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
+
+      - name: Cleanup orphaned Vultr resources
+        continue-on-error: true
+        env:
+          VULTR_API_KEY: ${{ secrets.VULTR_API_KEY }}
+        run: |
+          echo "Checking for orphaned Vultr resources..."
+          # Fail loudly if the API cannot be queried instead of reporting "nothing found"
+          ALL_INSTANCES=$(vultr-cli instance list --output json)
+          INSTANCE_LIST=$(echo "$ALL_INSTANCES" | jq -r '.instances[]? | select(.label == "molecule-'${CI_PROJECT_NAME_MOLECULE}'") | .id')
+          if [ -n "$INSTANCE_LIST" ]; then
+            echo "Found orphaned instances:"
+            echo "$INSTANCE_LIST"
+            echo "$INSTANCE_LIST" | while read instance_id; do
+              echo "Deleting instance: $instance_id"
+              vultr-cli instance delete "$instance_id" || echo "Failed to delete $instance_id"
+            done
+          else
+            echo "No orphaned instances found"
+          fi
+
+          echo "Checking for orphaned VPCs..."
+          ALL_VPCS=$(vultr-cli vpc list --output json)
+          VPC_LIST=$(echo "$ALL_VPCS" | jq -r '.vpcs[]? | select(.description == "molecule-'${CI_PROJECT_NAME_MOLECULE}'") | .id')
+          if [ -n "$VPC_LIST" ]; then
+            echo "Found orphaned VPCs:"
+            echo "$VPC_LIST"
+            echo "$VPC_LIST" | while read vpc_id; do
+              echo "Deleting VPC: $vpc_id"
+              vultr-cli vpc delete "$vpc_id" || echo "Failed to delete VPC $vpc_id"
+            done
+          else
+            echo "No orphaned VPCs found"
+          fi
+
+      - name: Cleanup workspace
+        if: always()
+        shell: bash
+        run: |
+          cd ${GITHUB_WORKSPACE}
+          shopt -s dotglob
+          rm -rf *
