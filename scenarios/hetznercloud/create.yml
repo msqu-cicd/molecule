@@ -166,7 +166,7 @@
         extended: yes
       when:
         - ansible_loop.first
-        - lookup('env', 'HCLOUD_PRIVATE_NET') | bool
+        - lookup('ansible.builtin.env', 'HCLOUD_PRIVATE_NET', default='false') | bool
       register: networks
       async: 7200
       poll: 0
@@ -181,7 +181,7 @@
         - networks is defined
         - networks.changed
         - ansible_loop.first
-        - lookup('env', 'HCLOUD_PRIVATE_NET') | bool
+        - lookup('ansible.builtin.env', 'HCLOUD_PRIVATE_NET', default='false') | bool
       loop: "{{ networks.results }}"
       loop_control:
         extended: yes
@@ -199,7 +199,7 @@
         extended: yes
       when:
         - ansible_loop.first
-        - lookup('env', 'HCLOUD_PRIVATE_NET') | bool
+        - lookup('ansible.builtin.env', 'HCLOUD_PRIVATE_NET', default='false') | bool
       register: subnetworks
 
     - name: Attach Server to Subnetwork(s)
@@ -210,7 +210,7 @@
         api_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
         state: "present"
       loop: "{{ molecule_yml.platforms }}"
-      when: lookup('env', 'HCLOUD_PRIVATE_NET') | bool
+      when: lookup('ansible.builtin.env', 'HCLOUD_PRIVATE_NET', default='false') | bool
       retries: 12
       delay: 10
       register: hcloud_server_network_result
