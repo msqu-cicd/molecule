@@ -73,9 +73,9 @@
       ansible.builtin.set_fact:
         server_type_fallbacks:
           cx23: ['cx23', 'cx33', 'cx43']
-          cax11: ['cax11', 'cax21', 'cx22']
-          cax21: ['cax21', 'cax31', 'cx32']
-          cax31: ['cax31', 'cax41', 'cx42']
+          cax11: ['cax11', 'cax21', 'cx23']
+          cax21: ['cax21', 'cax31', 'cx33']
+          cax31: ['cax31', 'cax41', 'cx43']
         server_user_data: |
           #cloud-config
           package_update: false
