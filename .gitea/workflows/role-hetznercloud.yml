@@ -73,7 +73,7 @@ jobs:
   lint:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:cb39350305b127203357003743c6516124882c2645e4f8e34511114ecf4e7bca
     needs: changes
     if: needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true'
     steps:
@@ -89,7 +89,7 @@ jobs:
   molecule-unit-debian:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:cb39350305b127203357003743c6516124882c2645e4f8e34511114ecf4e7bca
     needs: [changes, lint]
     if: (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true')
     env:
@@ -191,7 +191,7 @@ jobs:
   molecule-unit-ubuntu:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:cb39350305b127203357003743c6516124882c2645e4f8e34511114ecf4e7bca
     needs: [changes, lint, molecule-unit-debian]
     if: (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true')
     env:
@@ -293,7 +293,7 @@ jobs:
   molecule-integration-debian:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:cb39350305b127203357003743c6516124882c2645e4f8e34511114ecf4e7bca
     needs: [changes, lint, molecule-unit-debian, molecule-unit-ubuntu]
     if: always() && (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && needs.molecule-unit-debian.result == 'success'
     env:
@@ -402,7 +402,7 @@ jobs:
   molecule-integration-ubuntu:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:cb39350305b127203357003743c6516124882c2645e4f8e34511114ecf4e7bca
     needs: [changes, lint, molecule-unit-ubuntu, molecule-integration-debian]
     if: always() && (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && needs.molecule-unit-ubuntu.result == 'success'
     env:
@@ -513,7 +513,7 @@ jobs:
   molecule-cleanup:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:cb39350305b127203357003743c6516124882c2645e4f8e34511114ecf4e7bca
     if: always()
     needs: [molecule-unit-debian, molecule-unit-ubuntu, molecule-integration-debian, molecule-integration-ubuntu]
     env:
