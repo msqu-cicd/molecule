@@ -6,7 +6,8 @@
 #
 # Usage in molecule/default/converge_override.yml:
 #   - name: DynDNS
-#     ansible.builtin.import_tasks: dyndns.yml
+#     ansible.builtin.include_tasks: "{{ lookup('ansible.builtin.env', 'MOLECULE_SCENARIO_DIRECTORY') }}/dyndns.yml"
+#     tags: [always]
 # Needs molecule_ddns.domain (zone) and hetzner_dns_token (Cloud API token of the zone's project).
 # dyndns_cleanup.yml deletes the records again.
 - name: Set DynDNS subdomain

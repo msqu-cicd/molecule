@@ -2,7 +2,8 @@
 # Deletes the records created by dyndns.yml. Usage in molecule/default/cleanup.yml (hosts: localhost):
 #   - name: DynDNS
 #     when: hetzner_server_state == 'absent'
-#     ansible.builtin.import_tasks: dyndns_cleanup.yml
+#     ansible.builtin.include_tasks: "{{ lookup('ansible.builtin.env', 'MOLECULE_SCENARIO_DIRECTORY') }}/dyndns_cleanup.yml"
+#     tags: [always]
 - name: Delete DynDNS records
   hetzner.hcloud.zone_rrset:
     api_token: "{{ hetzner_dns_token }}"
