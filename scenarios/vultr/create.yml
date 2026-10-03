@@ -168,7 +168,7 @@
 
           {{ instance_conf | to_json | from_json | to_yaml }}
         dest: "{{ molecule_instance_config }}"
-        mode: \"0600\"
+        mode: "0600"
       when: instance_conf is defined and instance_conf | length > 0
 
     - name: Dump instance config
