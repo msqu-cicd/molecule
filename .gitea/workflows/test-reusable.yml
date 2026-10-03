@@ -1,0 +1,16 @@
+# Temporary: checks workflow_call support (inputs, inherited secrets) on this Gitea
+name: test-reusable
+on:
+  workflow_call:
+    inputs:
+      msg:
+        type: string
+        default: none
+jobs:
+  echo:
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Show input and secret availability
+        env:
+          HAS_HCLOUD: ${{ secrets.HCLOUD_TOKEN != '' }}
+        run: echo "msg=${{ inputs.msg }} hcloud_secret_present=$HAS_HCLOUD"
