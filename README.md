@@ -37,6 +37,18 @@ Used by roles that need distributions Hetzner does not offer (Arch Linux worksta
 - `VULTR_API_KEY` (required), `INSTANCE_SIZE` (default `vc2-1c-1gb`, 25 GB disk), `INSTANCE_REGION` (default `fra`)
 - One VPC per repo (`molecule-<repo>`), instances are labelled `molecule-<repo>`
 
+## EC2
+
+Uses the official `molecule-plugins` ec2 driver (`create.yml`/`destroy.yml` are its templates) in AWS account
+`900010691084`, region `eu-central-1`. The VPC, the subnets (tag `molecule=true`), the security group `molecule`
+and the restricted CI user come from [Infrastructure/aws-molecule](https://git.msqu.de/Infrastructure/aws-molecule).
+- Secrets `MOLECULE_AWS_ACCESS_KEY_ID` / `MOLECULE_AWS_SECRET_ACCESS_KEY` (outputs of that repo)
+- `INSTANCE_SIZE` default `t3.small` (amd64); Graviton types (`t4g.*`) select arm64 images
+- The workflow derives `EC2_IMAGE_OWNER`/`EC2_IMAGE_NAME` from the distro (official Debian and Canonical images)
+  and picks `EC2_SUBNET_ID` by tag; every job creates and terminates its own instance
+- Instances are tagged `managed-by=molecule`, `project=<repo>`; the cleanup job terminates leftovers of the
+  repo and any molecule instance older than 3 hours
+
 ## Shared DynDNS (hetznercloud)
 
 Multi-node roles that need a DNS name (k3s, rke2) include `dyndns.yml` from their `converge_override.yml`.
@@ -83,6 +95,9 @@ string like `"false"` is truthy in expressions.
 | `molecule_ref` | `main` | Ref of this repo to take the scenario from |
 
 Secrets: `SSH_PRIVATE_KEY`, `CI_RUNNER_PAT`, `CI_RUNNER_PAT_GITHUB`, `ANSIBLE_VAULT_PASSWORD`, `HCLOUD_TOKEN`, `HETZNER_DNS_TOKEN`.
+
+`role-ec2.yml` has the hetznercloud inputs plus `region` (default `eu-central-1`); its Debian and Ubuntu
+chains run in parallel and it takes `MOLECULE_AWS_ACCESS_KEY_ID`/`MOLECULE_AWS_SECRET_ACCESS_KEY` instead of the Hetzner secrets.
 
 `role-vultr.yml` has the same inputs except `unit`/`integration`/`*_distro` (it runs one integration job,
 `distro` defaults to `Arch Linux x64`) and takes `VULTR_API_KEY` instead of the Hetzner secrets.
