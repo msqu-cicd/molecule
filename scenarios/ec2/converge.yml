@@ -22,9 +22,10 @@
       tags:
         - molecule-idempotence-notest
 
+    # no ansible_user override here: facts run under become (USER=root), and EC2
+    # only accepts the cloud-init user from create.yml as SSH login
     - name: Set facts
       ansible.builtin.set_fact:
-        ansible_user: "{{ ansible_facts['env']['USER'] }}"
         interface_main_ipv4: "{{ ansible_facts['default_ipv4'].address }}"
         interface_main_ipv6: "{{ ansible_facts['default_ipv6'].address }}"
         ipv6_enabled: "{{ ansible_facts['all_ipv6_addresses'] | default([]) | length > 0 }}"
