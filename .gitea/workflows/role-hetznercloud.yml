@@ -17,6 +17,14 @@ on:
         description: Open a tmate debugging session before the tests ('true'/'false')
         type: string
         default: 'false'
+      unit:
+        description: Run the unit test jobs ('true'/'false')
+        type: string
+        default: 'true'
+      integration:
+        description: Run the integration test jobs ('true'/'false')
+        type: string
+        default: 'true'
       debian_distro:
         description: Hetzner image for the Debian jobs
         type: string
@@ -91,7 +99,7 @@ jobs:
     container:
       image: ghcr.io/msqu-devops/molecule:runner@sha256:cb39350305b127203357003743c6516124882c2645e4f8e34511114ecf4e7bca
     needs: [changes, lint]
-    if: (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true')
+    if: (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && inputs.unit == 'true'
     env:
       TEST_TYPE: unit
       HCLOUD_SERVER_STATE: stopped
@@ -119,6 +127,7 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keygen -y -f ~/.ssh/id_ed25519 > ~/.ssh/id_ed25519.pub
           echo "SSH Key Fingerprint: $(ssh-keygen -l -E md5 -f ~/.ssh/id_ed25519)"
+          ssh-keyscan -p 22222 git.msqu.de >> ~/.ssh/known_hosts 2>/dev/null || true
           cat > ~/.ssh/config << EOF
           Host *
             StrictHostKeyChecking no
@@ -193,7 +202,7 @@ jobs:
     container:
       image: ghcr.io/msqu-devops/molecule:runner@sha256:cb39350305b127203357003743c6516124882c2645e4f8e34511114ecf4e7bca
     needs: [changes, lint, molecule-unit-debian]
-    if: (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true')
+    if: (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && inputs.unit == 'true'
     env:
       TEST_TYPE: unit
       HCLOUD_SERVER_STATE: stopped
@@ -221,6 +230,7 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keygen -y -f ~/.ssh/id_ed25519 > ~/.ssh/id_ed25519.pub
           echo "SSH Key Fingerprint: $(ssh-keygen -l -E md5 -f ~/.ssh/id_ed25519)"
+          ssh-keyscan -p 22222 git.msqu.de >> ~/.ssh/known_hosts 2>/dev/null || true
           cat > ~/.ssh/config << EOF
           Host *
             StrictHostKeyChecking no
@@ -295,7 +305,7 @@ jobs:
     container:
       image: ghcr.io/msqu-devops/molecule:runner@sha256:cb39350305b127203357003743c6516124882c2645e4f8e34511114ecf4e7bca
     needs: [changes, lint, molecule-unit-debian, molecule-unit-ubuntu]
-    if: always() && (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && needs.molecule-unit-debian.result == 'success'
+    if: always() && (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && inputs.integration == 'true' && (needs.molecule-unit-debian.result == 'success' || inputs.unit != 'true')
     env:
       TEST_TYPE: integration
       HCLOUD_SERVER_STATE: stopped
@@ -323,6 +333,7 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keygen -y -f ~/.ssh/id_ed25519 > ~/.ssh/id_ed25519.pub
           echo "SSH Key Fingerprint: $(ssh-keygen -l -E md5 -f ~/.ssh/id_ed25519)"
+          ssh-keyscan -p 22222 git.msqu.de >> ~/.ssh/known_hosts 2>/dev/null || true
           cat > ~/.ssh/config << EOF
           Host *
             StrictHostKeyChecking no
@@ -404,7 +415,7 @@ jobs:
     container:
       image: ghcr.io/msqu-devops/molecule:runner@sha256:cb39350305b127203357003743c6516124882c2645e4f8e34511114ecf4e7bca
     needs: [changes, lint, molecule-unit-ubuntu, molecule-integration-debian]
-    if: always() && (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && needs.molecule-unit-ubuntu.result == 'success'
+    if: always() && (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && inputs.integration == 'true' && (needs.molecule-unit-ubuntu.result == 'success' || inputs.unit != 'true')
     env:
       TEST_TYPE: integration
       HCLOUD_SERVER_STATE: absent
@@ -432,6 +443,7 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keygen -y -f ~/.ssh/id_ed25519 > ~/.ssh/id_ed25519.pub
           echo "SSH Key Fingerprint: $(ssh-keygen -l -E md5 -f ~/.ssh/id_ed25519)"
+          ssh-keyscan -p 22222 git.msqu.de >> ~/.ssh/known_hosts 2>/dev/null || true
           cat > ~/.ssh/config << EOF
           Host *
             StrictHostKeyChecking no
@@ -514,7 +526,7 @@ jobs:
     runs-on: molecule
     container:
       image: ghcr.io/msqu-devops/molecule:runner@sha256:cb39350305b127203357003743c6516124882c2645e4f8e34511114ecf4e7bca
-    if: always()
+    if: always() && (inputs.unit == 'true' || inputs.integration == 'true')
     needs: [molecule-unit-debian, molecule-unit-ubuntu, molecule-integration-debian, molecule-integration-ubuntu]
     env:
       MOLECULE_SCENARIO_NAME: hetznercloud
@@ -541,6 +553,7 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keygen -y -f ~/.ssh/id_ed25519 > ~/.ssh/id_ed25519.pub
           echo "SSH Key Fingerprint: $(ssh-keygen -l -E md5 -f ~/.ssh/id_ed25519)"
+          ssh-keyscan -p 22222 git.msqu.de >> ~/.ssh/known_hosts 2>/dev/null || true
           cat > ~/.ssh/config << EOF
           Host *
             StrictHostKeyChecking no
