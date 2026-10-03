@@ -56,7 +56,7 @@ jobs:
 
       # any_modified also counts deleted files (any_changed does not)
       - id: changed
-        uses: https://github.com/tj-actions/changed-files@v47
+        uses: https://github.com/tj-actions/changed-files@24d32ffd492484c1d75e0c0b894501ddb9d30d62  # v47.0.0
         with:
           files_ignore: |
             .ansible-lint
@@ -72,7 +72,7 @@ jobs:
   lint:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:cb39350305b127203357003743c6516124882c2645e4f8e34511114ecf4e7bca
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:6eafa725f190f61b334818f7002e9d063a1b091bc8becf936674a611f610dec9
     needs: changes
     if: needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true'
     steps:
@@ -88,7 +88,7 @@ jobs:
   molecule-integration:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:cb39350305b127203357003743c6516124882c2645e4f8e34511114ecf4e7bca
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:6eafa725f190f61b334818f7002e9d063a1b091bc8becf936674a611f610dec9
     needs: [changes, lint]
     if: (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true')
     env:
@@ -165,7 +165,7 @@ jobs:
 
       - name: Setup debugging session
         if: inputs.molecule_debug == 'true'
-        uses: https://github.com/mxschmitt/action-tmate@v3
+        uses: https://github.com/mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113  # v3.24
         with:
           limit-access-to-actor: true
           # tmate, openssh-client and xz-utils come with the runner image
@@ -199,7 +199,7 @@ jobs:
   molecule-cleanup:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:cb39350305b127203357003743c6516124882c2645e4f8e34511114ecf4e7bca
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:6eafa725f190f61b334818f7002e9d063a1b091bc8becf936674a611f610dec9
     if: always()
     needs: [molecule-integration]
     env:

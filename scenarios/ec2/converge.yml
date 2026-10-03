@@ -1,0 +1,48 @@
+---
+- name: Converge
+  hosts: all
+  become: true
+  vars:
+    converge_override_file: "{{ lookup('ansible.builtin.first_found', [playbook_dir + '/converge_override.yml'], errors='ignore') or '' }}"
+  pre_tasks:
+    - name: Update APT Cache
+      ansible.builtin.apt:
+        update_cache: yes
+        cache_valid_time: 600
+      register: result
+      until: result is succeeded
+      when: ansible_facts['os_family'] == 'Debian'
+      tags:
+        - molecule-idempotence-notest
+
+    - name: Run the equivalent of "pacman -Sy" as a separate step
+      community.general.pacman:
+        update_cache: yes
+      when: ansible_facts['os_family'] == 'Archlinux'
+      tags:
+        - molecule-idempotence-notest
+
+    - name: Set facts
+      ansible.builtin.set_fact:
+        ansible_user: "{{ ansible_facts['env']['USER'] }}"
+        interface_main_ipv4: "{{ ansible_facts['default_ipv4'].address }}"
+        interface_main_ipv6: "{{ ansible_facts['default_ipv6'].address }}"
+        ipv6_enabled: "{{ ansible_facts['all_ipv6_addresses'] | default([]) | length > 0 }}"
+
+    # EC2 images (Debian, Ubuntu) are provisioned by cloud-init
+    - name: Set cloud-init fact
+      ansible.builtin.set_fact:
+        cloud_init_managed: true
+
+    - name: Include converge override tasks
+      ansible.builtin.include_tasks: "{{ converge_override_file }}"
+      when: converge_override_file is defined and converge_override_file != ""
+
+  tasks:
+    - name: Set role name
+      ansible.builtin.set_fact:
+        molecule_role_name: "{{ lookup('env', 'MOLECULE_ROLE_NAME') | default(lookup('env', 'CI_PROJECT_DIR') | basename, true) }}"
+
+    - name: Include role
+      ansible.builtin.include_role:
+        name: "{{ molecule_role_name }}"

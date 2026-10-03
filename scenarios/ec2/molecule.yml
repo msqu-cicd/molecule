@@ -1,0 +1,53 @@
+---
+# EC2 scenario using the official molecule-plugins ec2 driver (create.yml/destroy.yml are the
+# driver's templates). Network, security group and the CI user come from Infrastructure/aws-molecule.
+# The role-ec2.yml workflow sets EC2_IMAGE_OWNER/EC2_IMAGE_NAME (from the distro and the instance
+# type's architecture) and EC2_SUBNET_ID (a subnet tagged molecule=true).
+dependency:
+  name: galaxy
+driver:
+  name: ec2
+platforms:
+  - name: molecule-${CI_PROJECT_NAME_MOLECULE}
+    image_owner: ${EC2_IMAGE_OWNER}
+    image_name: ${EC2_IMAGE_NAME}
+    instance_type: ${INSTANCE_SIZE:-t3.small}
+    region: ${INSTANCE_REGION:-eu-central-1}
+    vpc_subnet_id: ${EC2_SUBNET_ID}
+    security_groups:
+      - molecule
+    boot_wait_seconds: 30
+    groups:
+      - master
+    tags:
+      Name: molecule-${CI_PROJECT_NAME_MOLECULE}
+      managed-by: molecule
+      project: ${CI_PROJECT_NAME_MOLECULE:-molecule}
+provisioner:
+  name: ansible
+  env:
+    GITHUB_TOKEN: ${GITHUB_TOKEN}
+  config_options:
+    defaults:
+      bin_ansible_callbacks: yes
+      callbacks_enabled: ansible.posix.timer, ansible.posix.profile_tasks
+      display_failed_stderr: true
+      host_key_checking: false
+      callback_result_format: yaml
+      vault_password_file: ${CI_PROJECT_DIR}/.vault
+      roles_path: ${CI_PROJECT_DIR}/..:~/.ansible/roles
+    ssh_connection:
+      ssh_args: '-o ControlMaster=auto -o ControlPersist=1800s -o ConnectionAttempts=100 -o UserKnownHostsFile=/dev/null -o PreferredAuthentications=publickey -o ServerAliveInterval=45 -o ServerAliveCountMax=10'
+      pipelining: true
+    diff:
+      always: true
+    callback_profile_tasks:
+      task_output_limit: all
+  playbooks:
+    prepare: ${MOLECULE_PLAYBOOK_PREPARE:-prepare.yml}
+    cleanup: ${MOLECULE_PLAYBOOK_CLEANUP:-cleanup.yml}
+    converge: ${MOLECULE_PLAYBOOK_CONVERGE:-converge.yml}
+    destroy: ${MOLECULE_PLAYBOOK_DESTROY:-destroy.yml}
+  log: true
+verifier:
+  name: ansible

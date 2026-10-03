@@ -18,12 +18,12 @@ jobs:
         uses: https://github.com/actions/checkout@v7
 
       - name: json-yaml-validate
-        uses: https://github.com/GrantBirki/json-yaml-validate.git@v3.3.2
+        uses: https://github.com/GrantBirki/json-yaml-validate.git@250fa0dc7d7f4a888b24dc2a6b2ff589753fba70  # v3.3.2
 
   lint:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:cb39350305b127203357003743c6516124882c2645e4f8e34511114ecf4e7bca
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:6eafa725f190f61b334818f7002e9d063a1b091bc8becf936674a611f610dec9
     steps:
       - name: Checkout repository
         uses: https://github.com/actions/checkout@v7
