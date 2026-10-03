@@ -1,0 +1,18 @@
+---
+# Deletes the records created by dyndns.yml. Usage in molecule/default/cleanup.yml (hosts: localhost):
+#   - name: DynDNS
+#     when: hetzner_server_state == 'absent'
+#     ansible.builtin.import_tasks: dyndns_cleanup.yml
+- name: Delete DynDNS records
+  hetzner.hcloud.zone_rrset:
+    api_token: "{{ hetzner_dns_token }}"
+    state: absent
+    zone: "{{ molecule_ddns.domain }}"
+    name: "*.{{ molecule_ddns_subdomain | default(lookup('ansible.builtin.env', 'CI_PROJECT_NAME_MOLECULE'), true) }}"
+    type: "{{ item }}"
+  loop:
+    - A
+    - AAAA
+  tags:
+    - always
+    - molecule-idempotence-notest

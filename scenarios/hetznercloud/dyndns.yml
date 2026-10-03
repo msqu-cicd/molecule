@@ -1,0 +1,86 @@
+---
+# Opt-in DynDNS for multi-node roles (k3s, rke2, ...): points *.<subdomain>.<zone> at the first host,
+# waits until Hetzner's authoritative nameservers serve it and sets molecule_ddns_fqdn
+# (k8s.<subdomain>.<zone>) on all hosts. The subdomain defaults to the repo name, so concurrent
+# runs of different roles do not overwrite each other's records.
+#
+# Usage in molecule/default/converge_override.yml:
+#   - name: DynDNS
+#     ansible.builtin.import_tasks: dyndns.yml
+# Needs molecule_ddns.domain (zone) and hetzner_dns_token (Cloud API token of the zone's project).
+# dyndns_cleanup.yml deletes the records again.
+- name: Set DynDNS subdomain
+  ansible.builtin.set_fact:
+    molecule_ddns_subdomain: "{{ molecule_ddns_subdomain | default(lookup('ansible.builtin.env', 'CI_PROJECT_NAME_MOLECULE'), true) }}"
+  tags:
+    - always
+
+- name: DynDNS
+  run_once: true
+  tags:
+    - always
+    - molecule-idempotence-notest
+  block:
+    - name: Set IPv4 fact
+      ansible.builtin.set_fact:
+        _dig_node_a_result: "{{ ansible_facts['all_ipv4_addresses'] | ansible.utils.ipaddr('public') | first }}"
+
+    - name: Set IPv6 fact
+      ansible.builtin.set_fact:
+        _dig_node_aaaa_result: "{{ ansible_facts['all_ipv6_addresses'] | ansible.utils.ipaddr('public') | first }}"
+      when: ansible_facts['all_ipv6_addresses'] | ansible.utils.ipaddr('public') | first is defined
+
+    - name: Create A record
+      hetzner.hcloud.zone_rrset:
+        api_token: "{{ hetzner_dns_token }}"
+        state: present
+        zone: "{{ molecule_ddns.domain }}"
+        name: "*.{{ molecule_ddns_subdomain }}"
+        type: A
+        ttl: 60
+        records:
+          - value: "{{ ansible_facts['all_ipv4_addresses'] | ansible.utils.ipaddr('public') | first }}"
+      delegate_to: localhost
+      register: dns_a_record
+      retries: 10
+      delay: 30
+      until: dns_a_record is not failed
+
+    - name: Create AAAA record
+      hetzner.hcloud.zone_rrset:
+        api_token: "{{ hetzner_dns_token }}"
+        state: present
+        zone: "{{ molecule_ddns.domain }}"
+        name: "*.{{ molecule_ddns_subdomain }}"
+        type: AAAA
+        ttl: 60
+        records:
+          - value: "{{ ansible_facts['all_ipv6_addresses'] | ansible.utils.ipaddr('public') | first }}"
+      delegate_to: localhost
+      register: dns_aaaa_record
+      retries: 10
+      delay: 30
+      until: dns_aaaa_record is not failed
+      when: ansible_facts['all_ipv6_addresses'] | ansible.utils.ipaddr('public') | first is defined
+
+    - name: Wait for DNSv4 propagation
+      ansible.builtin.debug:
+        msg: waiting for dns propagation
+      until: lookup('community.general.dig', '*.' + molecule_ddns_subdomain + '.' + molecule_ddns.domain, '@hydrogen.ns.hetzner.com,oxygen.ns.hetzner.com,helium.ns.hetzner.de', qtype='A') == _dig_node_a_result
+      when: dns_a_record.changed  # noqa: no-handler
+      retries: 30
+      delay: 10
+
+    - name: Wait for DNSv6 propagation
+      ansible.builtin.debug:
+        msg: waiting for dns propagation
+      until: lookup('community.general.dig', '*.' + molecule_ddns_subdomain + '.' + molecule_ddns.domain, '@hydrogen.ns.hetzner.com,oxygen.ns.hetzner.com,helium.ns.hetzner.de', qtype='AAAA') == _dig_node_aaaa_result
+      when: dns_aaaa_record.changed  # noqa: no-handler
+      retries: 30
+      delay: 10
+
+- name: Set molecule_ddns_fqdn
+  ansible.builtin.set_fact:
+    molecule_ddns_fqdn: "k8s.{{ molecule_ddns_subdomain }}.{{ molecule_ddns.domain }}"
+  tags:
+    - always
