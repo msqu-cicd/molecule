@@ -1,6 +1,6 @@
 SHELL:=/bin/bash
 
-MOLECULE_GIT_REPO='ssh://git@git.msqu.de:22222/ansible/molecule.git'
+MOLECULE_GIT_REPO='ssh://git@git.msqu.de:22222/CICD/molecule.git'
 MOLECULE_LINT_IMAGE='git.msqu.de/devops/molecule:lint'
 ANSIBLE_VAULT_PASSWORD_FILE_LOCATION := ~/.secrets/ansible-vault-pass
 HCLOUD_TOKEN := $(shell cat ~/.secrets/hcloud)
@@ -11,27 +11,27 @@ TMPDIR_GIT := $(shell mktemp -d /tmp/git.XXXX)
 TMPDIR_MOLECULE := $(shell mktemp -d /tmp/molecule.XXXX)
 
 DRIVER ?= hetznercloud
-MOLECULE_DISTRO ?= debian-11
+MOLECULE_DISTRO ?= debian-13
 CI_PROJECT_NAME=$$(basename $$(pwd))
 CI_PROJECT_DIR=$(shell pwd)
 CI_PROJECT_NAME_MOLECULE=$(shell echo ${CI_PROJECT_NAME} | tr '_' '-')
 
 .prepare:
 	mkdir -p $(CI_PROJECT_DIR)/molecule/default/
-	cd $(TMPDIR_GIT) && git clone $(MOLECULE_GIT_REPO) && rsync -avzh --ignore-existing --ignore-errors molecule/${DRIVER}/ $(CI_PROJECT_DIR)/molecule/default/
+	cd $(TMPDIR_GIT) && git clone $(MOLECULE_GIT_REPO) && rsync -avzh --ignore-existing --ignore-errors molecule/scenarios/${DRIVER}/ $(CI_PROJECT_DIR)/molecule/default/
 
 .PHONY: converge
-converge: .prepare ## make converge MOLECULE_DISTRO=debian-11 DRIVER=podman
+converge: .prepare ## make converge MOLECULE_DISTRO=debian-13 DRIVER=podman
 	HCLOUD_TOKEN=$(HCLOUD_TOKEN) CI_PROJECT_NAME_MOLECULE=$(CI_PROJECT_NAME_MOLECULE) ANSIBLE_VAULT_PASSWORD_FILE=${ANSIBLE_VAULT_PASSWORD_FILE_LOCATION} MOLECULE_DISTRO=$(MOLECULE_DISTRO) MOLECULE_EPHEMERAL_DIRECTORY=$(TMPDIR_MOLECULE)/.cache/ molecule converge
 	rm -rf $(TMPDIR_GIT) && rm -rf $(TMPDIR_MOLECULE)
 
 .PHONY: test
-test: .prepare ## make test MOLECULE_DISTRO=debian-11 DRIVER=podman
+test: .prepare ## make test MOLECULE_DISTRO=debian-13 DRIVER=podman
 	HCLOUD_TOKEN=$(HCLOUD_TOKEN) CI_PROJECT_NAME_MOLECULE=$(CI_PROJECT_NAME_MOLECULE) ANSIBLE_VAULT_PASSWORD_FILE=${ANSIBLE_VAULT_PASSWORD_FILE_LOCATION} MOLECULE_DISTRO=$(MOLECULE_DISTRO) MOLECULE_EPHEMERAL_DIRECTORY=$(TMPDIR_MOLECULE)/.cache/ molecule test
 	rm -rf $(TMPDIR_GIT) && rm -rf $(TMPDIR_MOLECULE)
 
 .PHONY: destroy
-destroy: .prepare ## make destroy MOLECULE_DISTRO=debian-11 DRIVER=podman
+destroy: .prepare ## make destroy MOLECULE_DISTRO=debian-13 DRIVER=podman
 	export HCLOUD_SERVER_STATE=absent && HCLOUD_TOKEN=$(HCLOUD_TOKEN) CI_PROJECT_NAME_MOLECULE=$(CI_PROJECT_NAME_MOLECULE) ANSIBLE_VAULT_PASSWORD_FILE=${ANSIBLE_VAULT_PASSWORD_FILE_LOCATION} MOLECULE_DISTRO=$(MOLECULE_DISTRO) MOLECULE_EPHEMERAL_DIRECTORY=$(TMPDIR_MOLECULE)/.cache/ molecule destroy
 	rm -rf $(TMPDIR_GIT) && rm -rf $(TMPDIR_MOLECULE) && git clean -xdf molecule/
 
