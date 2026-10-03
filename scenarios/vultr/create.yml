@@ -66,7 +66,7 @@
       ansible.builtin.set_fact:
         vultr_server_state: "{{ lookup('ansible.builtin.env', 'VULTR_SERVER_STATE') or 'present' }}"
         final_ssh_key_name: "{% if id_ed25519_stat.stat.exists %}{{ existing_ssh_key_name }}{% else %}{{ ssh_key_name }}{% endif %}"
-        final_ssh_key_path: "{% if id_ed25519_stat.stat.exists %}~/.ssh/id_ed25519{% else %}{{ lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}/ssh_key{% endif %}"
+        final_ssh_key_path: "{{ ssh_id_path }}"
 
     - name: Print debug output
       ansible.builtin.debug:
@@ -76,7 +76,7 @@
 
     - name: Create private network(s)
       vultr.cloud.vpc:
-        name: molecule
+        name: "{{ item.name }}"
         v4_subnet: "{{ item.vpc_cidr | ansible.utils.ipaddr('network') }}"
         v4_subnet_mask: "{{ item.vpc_cidr | ansible.utils.ipaddr('prefix') }}"
         region: "{{ item.region }}"

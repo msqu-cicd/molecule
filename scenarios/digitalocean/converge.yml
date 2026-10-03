@@ -27,7 +27,7 @@
         ansible_user: "{{ ansible_facts['env']['USER'] }}"
         interface_main_ipv4: "{{ ansible_facts['default_ipv4'].address }}"
         interface_main_ipv6: "{{ ansible_facts['default_ipv6'].address }}"
-        ipv6_enabled: "{% if lookup('ansible.builtin.file', '/proc/net/if_inet6' , errors='warn') %}true{% else %}false{% endif %}"
+        ipv6_enabled: "{{ ansible_facts['all_ipv6_addresses'] | default([]) | length > 0 }}"
 
     # Always true for Hetzner...
     - name: Set cloud-init fact

@@ -4,14 +4,7 @@
   connection: local
   gather_facts: false
   no_log: "{{ molecule_no_log }}"
-  vars:
-    ssh_id_path: "~/.ssh/id_ed25519"
   tasks:
-    - name: Check if SSH key already exists
-      ansible.builtin.stat:
-        path: "{{ ssh_id_path }}"
-      register: id_ed25519_stat
-
     - name: Set hetzner facts
       ansible.builtin.set_fact:
         hetzner_server_state: "{{ lookup('ansible.builtin.env', 'HCLOUD_SERVER_STATE') or 'stopped' }}"
@@ -127,11 +120,9 @@
         api_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
         state: absent
       when:
-        - not id_ed25519_stat.stat.exists
         - not skip_instances
-        - not hcloud_ssh_key.name == 'michael@eifel'
-        - not hcloud_ssh_key.name == 'molecule'
-        - instance_conf | length  # must contain at least one instance
+        - instance_conf | length > 0  # must contain at least one instance
+        - instance_conf[0].ssh_key_name is ansible.builtin.match('molecule-generated-')
 
     - name: Populate instance config
       ansible.builtin.set_fact:
