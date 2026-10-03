@@ -37,6 +37,10 @@ on:
         description: Server type/plan, empty uses the scenario default
         type: string
         default: ''
+      extra_files_ignore:
+        description: Additional changed-files ignore patterns, one per line (e.g. 'files/**')
+        type: string
+        default: ''
       molecule_ref:
         description: Ref of CICD/molecule to take the scenario from
         type: string
@@ -77,6 +81,7 @@ jobs:
             meta/main.yml
             README.md
             renovate.json
+            ${{ inputs.extra_files_ignore }}
 
   lint:
     runs-on: molecule
