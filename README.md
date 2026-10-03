@@ -2,28 +2,10 @@
 
 CI/CD infrastructure for Molecule-based Ansible testing with multiple cloud providers
 
-# Containers
+# Runner image
 
-## Lint
-
-Based on latest alpine with following software:
-- bash
-- curl
-- ansible-lint
-- shellcheck
-- yamllint
-
-## Ubuntu
-
-Upstream Ubuntu 20.04 / 22.04 Docker Container with following extensions:
-
-- Cron
-- DNSmasq
-- GnuPG
-- Python3
-- Rsyslog
-- SystemD
-...
+CI jobs run in `ghcr.io/msqu-devops/molecule:runner`, which is built outside this repository.
+`requirements/collections.yml` lists the Ansible collections it ships (kept up to date by Renovate).
 
 # Scenarios
 
@@ -39,12 +21,13 @@ Optimized molecule scenario for Hetzner Cloud infrastructure testing with the fo
 ### Environment Variables
 - `HCLOUD_TOKEN`: Hetzner Cloud API token (required)
 - `HCLOUD_PRIVATE_NET`: Enable private networking (`true`/`false`, default: `false`)
-- `INSTANCE_SIZE`: Server type (default: `cax11`)
-- `INSTANCE_REGION`: Location (default: `fsn1`)
-- `MOLECULE_DISTRO`: OS image (default: `debian-13`)
+- `INSTANCE_SIZE`: Server type (default: `cx23`, falls back to `cx33`/`cx43` when unavailable)
+- `INSTANCE_REGION`: Location (default: `hel1`)
+- `MOLECULE_DISTRO`: OS image (required, CI uses `debian-13` and `ubuntu-26.04`)
 
 ### Resource Management
-- Servers use ARM64 `cax11` instances by default (cost-effective)
+- All platforms in `molecule.yml` are created, so roles can define multi-node scenarios
+- Servers are stopped between CI jobs and rebuilt by the next job; the last job deletes them
 - Automatic cleanup of all resources after testing
 - Labels applied: `environment: molecule`, `project: <project-name>`, `managed-by: molecule`
 
@@ -56,7 +39,7 @@ Ansible roles are tested using standardized molecule workflows with the followin
 ### Test Execution Order
 1. **Changes Detection**: Skip tests if no relevant files changed
 2. **Lint**: Ansible-lint and yamllint validation
-3. **Unit Tests**: Sequential execution (Debian → Ubuntu)
+3. **Unit Tests**: Sequential execution (Debian 13 → Ubuntu 26.04)
 4. **Integration Tests**: Full deployment tests with fault tolerance
 
 ### Workflow Features
@@ -74,22 +57,10 @@ molecule test
 HCLOUD_PRIVATE_NET=true molecule test
 
 # Different instance size
-INSTANCE_SIZE=cx22 molecule test
+INSTANCE_SIZE=cx33 molecule test
 ```
 
 # Configuration
-## Only Lint, no Molecule Tests
-
-If your role is not testable inside a Container ( no AWS credentials, hardware related playbook ... ) you can still use the linting,
-by setting the following attribute in your roles `meta/main.yml`
-
-```yaml
-galaxy_info:
-...
-  min_ansible_container_version: "X"
-...
-```
-
 ## Allow CI matrix jobs to fail
 
 If you want to include tests which are not mandatory, mark them as `experimental: true`
@@ -115,7 +86,7 @@ If you want to include tests which are not mandatory, mark them as `experimental
 * Create `molecule/default/requirements.yml` inside the repository with following content and replace values as needed:
 
 ```yaml
-- src: https://github.com/Rheinwerk/ansible-role-example.git
+- src: https://git.msqu.de/Ansible/example.git
   name: example
   scm: git
 
