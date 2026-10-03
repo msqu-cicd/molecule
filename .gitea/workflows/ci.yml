@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  json-yaml-validate:
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Checkout repository
+        uses: https://github.com/actions/checkout@v7
+
+      - name: json-yaml-validate
+        uses: https://github.com/GrantBirki/json-yaml-validate.git@v3.3.2
+
+  lint:
+    runs-on: molecule
+    container:
+      image: ghcr.io/msqu-devops/molecule:runner
+    steps:
+      - name: Checkout repository
+        uses: https://github.com/actions/checkout@v7
+
+      - name: Ansible Lint scenarios
+        run: ansible-lint --offline scenarios/
+
+      - name: Yaml Lint
+        run: yamllint -f colored scenarios .gitea

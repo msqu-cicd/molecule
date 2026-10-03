@@ -24,6 +24,7 @@
     - name: Gather Vultr servers information
       vultr.cloud.instance_info:
         region: "{{ item.region }}"
+        api_key: "{{ lookup('env', 'VULTR_API_KEY') }}"
       with_items: "{{ molecule_yml.platforms }}"
       register: vultr_server_info_output
       when:
@@ -90,4 +91,5 @@
 
           {{ instance_conf | to_json | from_json | to_yaml }}
         dest: "{{ molecule_instance_config }}"
+        mode: \"0600\"
       when: server.changed | bool

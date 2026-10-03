@@ -29,6 +29,17 @@ on:
         description: Ref of CICD/molecule to take the scenario from
         type: string
         default: main
+    secrets:
+      SSH_PRIVATE_KEY:
+        required: true
+      CI_RUNNER_PAT:
+        required: true
+      CI_RUNNER_PAT_GITHUB:
+        required: false
+      ANSIBLE_VAULT_PASSWORD:
+        required: true
+      VULTR_API_KEY:
+        required: true
 
 jobs:
   changes:
@@ -151,10 +162,14 @@ jobs:
         uses: https://github.com/mxschmitt/action-tmate@v3
         with:
           limit-access-to-actor: true
+          # tmate, openssh-client and xz-utils come with the runner image
+          install-dependencies: false
 
       - name: Run Molecule integration tests
-        run: molecule test ${{ inputs.args }}
+        # word splitting of MOLECULE_ARGS is intended (multiple molecule CLI arguments)
+        run: molecule test $MOLECULE_ARGS
         env:
+          MOLECULE_ARGS: ${{ inputs.args }}
           ANSIBLE_FORCE_COLOR: '1'
           ANSIBLE_VERBOSITY: '1'
           CI_JOB_ID: ${{ github.run_id }}

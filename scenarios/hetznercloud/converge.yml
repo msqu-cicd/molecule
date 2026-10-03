@@ -41,8 +41,8 @@
   tasks:
     - name: Set role name
       ansible.builtin.set_fact:
-        role_name: "{{ lookup('env', 'MOLECULE_ROLE_NAME') | default(lookup('env', 'CI_PROJECT_DIR') | basename, true) }}"
+        molecule_role_name: "{{ lookup('env', 'MOLECULE_ROLE_NAME') | default(lookup('env', 'CI_PROJECT_DIR') | basename, true) }}"
 
     - name: Include role
       ansible.builtin.include_role:
-        name: "{{ role_name }}"
+        name: "{{ molecule_role_name }}"

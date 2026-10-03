@@ -39,7 +39,11 @@
             ssh_key: "{{ generated_public_ssh_key }}"
             api_key: "{{ lookup('env', 'VULTR_API_KEY') }}"
             state: present
-          ignore_errors: true
+          register: molecule_ssh_key
+          # The same key may already be registered under another name; anything else is a real error
+          failed_when:
+            - molecule_ssh_key is failed
+            - "'already' not in (molecule_ssh_key.msg | default(''))"
 
     - name: Create new SSH key
       when: not id_ed25519_stat.stat.exists
@@ -164,6 +168,7 @@
 
           {{ instance_conf | to_json | from_json | to_yaml }}
         dest: "{{ molecule_instance_config }}"
+        mode: \"0600\"
       when: instance_conf is defined and instance_conf | length > 0
 
     - name: Dump instance config

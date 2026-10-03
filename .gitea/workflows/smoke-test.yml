@@ -1,0 +1,46 @@
+# Runs the apt role's full molecule pipeline against the scenarios of this ref,
+# so scenario changes are tested before (pull request) or right after (main) they reach all roles.
+name: Smoke test
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'scenarios/**'
+  pull_request:
+    paths:
+      - 'scenarios/**'
+  workflow_dispatch:
+
+concurrency:
+  group: smoke-test
+  cancel-in-progress: true
+
+jobs:
+  apt:
+    runs-on: molecule
+    container:
+      image: ghcr.io/msqu-devops/molecule:runner
+    timeout-minutes: 120
+    steps:
+      - name: Run Ansible/apt molecule tests with this molecule ref
+        env:
+          TOKEN: ${{ secrets.CI_RUNNER_PAT }}
+          MOLECULE_REF: ${{ github.head_ref || github.ref_name }}
+        run: |
+          set -euo pipefail
+          api="${GITHUB_SERVER_URL}/api/v1/repos/Ansible/apt/actions"
+          body=$(jq -n --arg ref "$MOLECULE_REF" '{ref: "main", inputs: {force_run: "true", molecule_ref: $ref}}')
+          resp=$(curl -fsS -X POST -H "Authorization: token $TOKEN" -H 'Content-Type: application/json' \
+            "$api/workflows/molecule.yml/dispatches?return_run_details=true" -d "$body")
+          id=$(echo "$resp" | jq -r .workflow_run_id)
+          echo "Started $(echo "$resp" | jq -r .html_url) with molecule_ref=$MOLECULE_REF"
+          while :; do
+            run=$(curl -fsS -H "Authorization: token $TOKEN" "$api/runs/$id")
+            [ "$(echo "$run" | jq -r .status)" = completed ] && break
+            sleep 60
+          done
+          conclusion=$(echo "$run" | jq -r .conclusion)
+          echo "apt molecule run finished: $conclusion"
+          [ "$conclusion" = success ]

@@ -2,11 +2,11 @@
 dependency:
   name: galaxy
 driver:
-   name: default
+  name: default
 platforms:
   - name: molecule-${CI_PROJECT_NAME_MOLECULE}
     os: "${MOLECULE_DISTRO}"
-    plan:  ${INSTANCE_SIZE:-vc2-1c-1gb}
+    plan: ${INSTANCE_SIZE:-vc2-1c-1gb}
     region: ${INSTANCE_REGION:-fra}
     groups:
       - master
