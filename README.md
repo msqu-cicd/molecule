@@ -5,7 +5,7 @@ CI/CD infrastructure for Molecule-based Ansible testing with multiple cloud prov
 # Runner image
 
 CI jobs run in `ghcr.io/msqu-devops/molecule:runner`, which is built outside this repository.
-`requirements/collections.yml` lists the Ansible collections it ships (kept up to date by Renovate).
+The image, its CLIs and its pinned Ansible collections are defined in [DevOps/molecule](https://git.msqu.de/DevOps/molecule) (`dockerfiles/Runner`, `dockerfiles/collections.yml`).
 
 # Scenarios
 

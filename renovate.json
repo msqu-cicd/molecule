@@ -5,21 +5,5 @@
   ],
   "prHourlyLimit": 10,
   "prConcurrentLimit": 20,
-  "branchConcurrentLimit": 20,
-  "packageRules": [
-    {
-      "matchManagers": [
-        "ansible-galaxy"
-      ],
-      "groupName": "ansible collections",
-      "groupSlug": "ansible-collections",
-      "semanticCommitScope": "ansible"
-    }
-  ],
-  "ansible-galaxy": {
-    "enabled": true,
-    "managerFilePatterns": [
-      "/requirements/collections\\.ya?ml$/"
-    ]
-  }
+  "branchConcurrentLimit": 20
 }
