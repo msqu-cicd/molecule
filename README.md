@@ -31,56 +31,91 @@ Optimized molecule scenario for Hetzner Cloud infrastructure testing with the fo
 - Automatic cleanup of all resources after testing
 - Labels applied: `environment: molecule`, `project: <project-name>`, `managed-by: molecule`
 
+## Vultr
+
+Used by roles that need distributions Hetzner does not offer (Arch Linux workstations).
+- `VULTR_API_KEY` (required), `INSTANCE_SIZE` (default `vc2-1c-1gb`, 25 GB disk), `INSTANCE_REGION` (default `fra`)
+- One VPC per repo (`molecule-<repo>`), instances are labelled `molecule-<repo>`
+
+## Shared DynDNS (hetznercloud)
+
+Multi-node roles that need a DNS name (k3s, rke2) include `dyndns.yml` from their `converge_override.yml`.
+It points `*.<repo>.<zone>` at the first host, waits until Hetzner's nameservers serve it and sets
+`molecule_ddns_fqdn` (`k8s.<repo>.<zone>`). `dyndns_cleanup.yml` deletes the records again.
+Needs `molecule_ddns.domain` and `hetzner_dns_token` (org secret `HETZNER_DNS_TOKEN`, a Cloud API token
+of the project that holds the zone). See the usage comments at the top of both files.
+
 # Usage
 
-## CI Workflow
-Ansible roles are tested using standardized molecule workflows with the following structure:
+## CI workflow
 
-### Test Execution Order
-1. **Changes Detection**: Skip tests if no relevant files changed
-2. **Lint**: Ansible-lint and yamllint validation
-3. **Unit Tests**: Sequential execution (Debian 13 → Ubuntu 26.04)
-4. **Integration Tests**: Full deployment tests with fault tolerance
-
-### Workflow Features
-- **Concurrency Control**: New runs automatically cancel older ones
-- **Reduced Verbosity**: `ANSIBLE_VERBOSITY=1` for cleaner output
-- **Environment Parameterization**: Configurable distros and scenarios
-- **Fault Tolerance**: Integration tests can proceed even if some unit tests fail
-
-### Example Usage
-```bash
-# Basic test
-molecule test
-
-# With private networking
-HCLOUD_PRIVATE_NET=true molecule test
-
-# Different instance size
-INSTANCE_SIZE=cx33 molecule test
-```
-
-# Configuration
-## Allow CI matrix jobs to fail
-
-If you want to include tests which are not mandatory, mark them as `experimental: true`
+Roles do not carry their own pipeline. Each role's `.gitea/workflows/molecule.yml` is a short caller of a
+reusable workflow in this repository, see [examples/caller-molecule.yml](examples/caller-molecule.yml):
 
 ```yaml
-....
+jobs:
   molecule:
-    ...
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          ...
-          - distro: ubuntu-22.04
-            test_type: unit
-            python_version: '3.10'
-            experimental: true
-
+    uses: CICD/molecule/.gitea/workflows/role-hetznercloud.yml@main   # or role-vultr.yml
+    with:
+      force_run: ${{ format('{0}', inputs.force_run) }}
+      molecule_debug: ${{ format('{0}', inputs.molecule_debug) }}
+      args: ${{ inputs.args }}
+      molecule_ref: ${{ inputs.molecule_ref || 'main' }}
+    secrets:
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+      # ... only the secrets the workflow declares
 ```
 
+Pass inputs through `format('{0}', ...)`: Gitea hands dispatch inputs over as strings, and a non-empty
+string like `"false"` is truthy in expressions.
+
+### role-hetznercloud.yml
+
+| Input | Default | Description |
+|-------|---------|-------------|
+| `force_run` | `'false'` | Run even if only ignored files changed |
+| `molecule_debug` | `'false'` | Open a tmate session before the tests |
+| `args` | `''` | Extra `molecule test` arguments |
+| `unit` / `integration` | `'true'` | Switch the unit / integration jobs (both `'false'` = lint only) |
+| `debian_distro` / `ubuntu_distro` | `debian-13` / `ubuntu-26.04` | Hetzner images |
+| `instance_size` | scenario default | Server type |
+| `extra_files_ignore` | `''` | Additional changed-files ignore patterns |
+| `molecule_ref` | `main` | Ref of this repo to take the scenario from |
+
+Secrets: `SSH_PRIVATE_KEY`, `CI_RUNNER_PAT`, `CI_RUNNER_PAT_GITHUB`, `ANSIBLE_VAULT_PASSWORD`, `HCLOUD_TOKEN`, `HETZNER_DNS_TOKEN`.
+
+`role-vultr.yml` has the same inputs except `unit`/`integration`/`*_distro` (it runs one integration job,
+`distro` defaults to `Arch Linux x64`) and takes `VULTR_API_KEY` instead of the Hetzner secrets.
+
+### Pipeline
+
+1. **changes**: skip the tests when only ignored files changed (deletions count as changes)
+2. **lint**: ansible-lint and yamllint
+3. **unit** (Debian, then Ubuntu): role with `tests/vars.yml`; servers are stopped between jobs and rebuilt
+4. **integration** (Debian, then Ubuntu): role with the infra `group_vars`; the last job deletes the servers
+5. **cleanup** (always, also after failures/cancellations): deletes leftover servers and DNS records,
+   then a safety net deletes CI servers of any repo older than 3 hours
+
+Runs of one repo share the concurrency group `molecule-tests`; a new run cancels the running one.
+
+## Testing changes to this repository
+
+- `ci.yml` lints the scenarios and workflows on every push and pull request.
+- `smoke-test.yml` runs the full Ansible/apt pipeline against the scenarios of the pushed ref
+  (`molecule_ref`) whenever `scenarios/**` changes, and fails if apt fails.
+- The runner image is pinned by digest in the workflows; Renovate updates it.
+
+## Local runs
+
+```bash
+molecule test                              # basic test
+HCLOUD_PRIVATE_NET=true molecule test      # with private networking
+INSTANCE_SIZE=cx33 molecule test           # different server type
+```
+
+`examples/Makefile` copies a scenario into a role and runs molecule with the same environment as CI.
+
+# Configuration
 ## Include prerequisite role
 
 * Create `molecule/default/requirements.yml` inside the repository with following content and replace values as needed:

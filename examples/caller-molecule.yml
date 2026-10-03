@@ -1,0 +1,56 @@
+name: Molecule Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      args:
+        description: 'Additional arguments passed to molecule test'
+        default: ''
+        type: string
+      molecule_debug:
+        description: 'Enable molecule debug mode'
+        default: false
+        type: boolean
+      force_run:
+        description: 'Force run tests even if no changes detected'
+        default: false
+        type: boolean
+      molecule_ref:
+        description: 'Ref of CICD/molecule to take the scenario from'
+        default: main
+        type: string
+  pull_request:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '.ansible-lint'
+      - '.gitea/**'
+      - '.github/**'
+      - '.yamllint'
+      - 'Makefile'
+      - 'meta/main.yml'
+      - 'README.md'
+      - 'renovate.json'
+
+concurrency:
+  group: molecule-tests
+  cancel-in-progress: true
+
+jobs:
+  molecule:
+    # Shared workflow, see https://git.msqu.de/CICD/molecule (README: caller template)
+    uses: CICD/molecule/.gitea/workflows/role-hetznercloud.yml@main
+    with:
+      # format() turns booleans and strings alike into 'true'/'false' ('' on push/PR)
+      force_run: ${{ format('{0}', inputs.force_run) }}
+      molecule_debug: ${{ format('{0}', inputs.molecule_debug) }}
+      args: ${{ inputs.args }}
+      molecule_ref: ${{ inputs.molecule_ref || 'main' }}
+    secrets:
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+      CI_RUNNER_PAT: ${{ secrets.CI_RUNNER_PAT }}
+      CI_RUNNER_PAT_GITHUB: ${{ secrets.CI_RUNNER_PAT_GITHUB }}
+      ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
+      HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+      HETZNER_DNS_TOKEN: ${{ secrets.HETZNER_DNS_TOKEN }}
