@@ -21,8 +21,10 @@ Optimized molecule scenario for Hetzner Cloud infrastructure testing with the fo
 ### Environment Variables
 - `HCLOUD_TOKEN`: Hetzner Cloud API token (required)
 - `HCLOUD_PRIVATE_NET`: Enable private networking (`true`/`false`, default: `false`)
-- `INSTANCE_SIZE`: Server type (default: `cx23`, falls back to `cx33`/`cx43` when unavailable)
-- `INSTANCE_REGION`: Location (default: `hel1`)
+- `INSTANCE_SIZE`: Server type (default: `cx23`; falls back to `cpx22`, `cx33`, `cpx32`, `cx43` when unavailable)
+- `INSTANCE_REGION`: Preferred location (default: `hel1`); `fsn1` and `nbg1`, the other eu-central locations, are tried next
+- Server type and location candidates are filtered by Hetzner's per-location availability (`server_type_info`),
+  and every pair is tried when that lookup fails. A server left by an earlier job keeps its type and location.
 - `MOLECULE_DISTRO`: OS image (required, CI uses `debian-13` and `ubuntu-26.04`)
 
 ### Resource Management

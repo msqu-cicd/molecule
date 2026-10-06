@@ -8,6 +8,20 @@
     ssh_port: 22
     ssh_user: root
     ssh_id_path: "~/.ssh/id_ed25519"
+    # Hetzner restricts server creation when capacity is short (status.hetzner.com,
+    # "Limited availability of cloud instances"): a type can be sold out in one
+    # location and free in another. Candidates are server types x locations, all in
+    # eu-central, the network zone of the private subnet below. The platform's own
+    # location comes first.
+    server_locations: ['hel1', 'fsn1', 'nbg1']
+    # {server type: {location: available}} from server_type_info; empty when the
+    # lookup failed, and then every pair is tried.
+    server_type_available: >-
+      {%- set out = {} -%}
+      {%- for t in _server_type_info.hcloud_server_type_info | default([]) -%}
+        {%- set _ = out.update({t.name: (t.locations | default([]) | items2dict(key_name='name', value_name='available'))}) -%}
+      {%- endfor -%}
+      {{ out }}
   tasks:
     - name: Check if SSH key already exists
       ansible.builtin.stat:
@@ -75,11 +89,13 @@
 
     - name: Define server type fallbacks and user_data
       ansible.builtin.set_fact:
+        # CX and CAX are Hetzner's Cost-Optimized tier, often sold out; CPX
+        # (regular performance) has the same sizes and is the next choice.
         server_type_fallbacks:
-          cx23: ['cx23', 'cx33', 'cx43']
-          cax11: ['cax11', 'cax21', 'cx23']
-          cax21: ['cax21', 'cax31', 'cx33']
-          cax31: ['cax31', 'cax41', 'cx43']
+          cx23: ['cx23', 'cpx22', 'cx33', 'cpx32', 'cx43']
+          cax11: ['cax11', 'cax21', 'cx23', 'cpx22']
+          cax21: ['cax21', 'cax31', 'cx33', 'cpx32']
+          cax31: ['cax31', 'cax41', 'cx43', 'cpx42']
         server_user_data: |
           #cloud-config
           package_update: false
@@ -108,22 +124,83 @@
             - systemctl stop apt-daily-upgrade.timer
             - systemctl disable apt-daily-upgrade.timer
 
+    - name: Look up server type availability per location
+      block:
+        - name: Read server types
+          hetzner.hcloud.server_type_info:
+            api_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
+          register: _server_type_info
+      rescue:
+        - name: Availability unknown, every type and location will be tried
+          ansible.builtin.debug:
+            msg: "server_type_info failed: {{ ansible_failed_result.msg | default('no message') }}"
+
+    # A server from an earlier job of this run keeps its type and location: the
+    # rebuild below must not try to change its type or create a second one.
+    - name: Look up existing servers
+      hetzner.hcloud.server_info:
+        name: "{{ item.name }}"
+        api_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
+      loop: "{{ molecule_yml.platforms }}"
+      loop_control:
+        label: "{{ item.name }}"
+      register: _existing_servers
+
+    - name: Build server type and location candidates
+      ansible.builtin.set_fact:
+        server_candidates: >-
+          {%- set out = [] -%}
+          {%- for p in molecule_yml.platforms -%}
+            {%- set existing = _existing_servers.results | selectattr('item.name', 'equalto', p.name)
+                | map(attribute='hcloud_server_info') | first | default([]) -%}
+            {%- set types = server_type_fallbacks[p.server_type] | default([p.server_type]) -%}
+            {%- if existing | length > 0 -%}
+              {%- set _ = out.append({'platform': p, 'type': existing[0].server_type,
+                                      'location': none if p.datacenter is defined else existing[0].location}) -%}
+            {%- elif p.datacenter is defined -%}
+              {%- for t in types -%}
+                {%- set _ = out.append({'platform': p, 'type': t, 'location': none}) -%}
+              {%- endfor -%}
+            {%- else -%}
+              {%- set first = p.location | default(server_locations[0]) -%}
+              {%- set locations = [first] + (server_locations | reject('equalto', first) | list) -%}
+              {%- set every = [] -%}
+              {%- set free = [] -%}
+              {%- for t in types -%}
+                {%- for l in locations -%}
+                  {%- set c = {'platform': p, 'type': t, 'location': l} -%}
+                  {%- set _ = every.append(c) -%}
+                  {%- if t not in server_type_available or server_type_available[t].get(l, false) -%}
+                    {%- set _ = free.append(c) -%}
+                  {%- endif -%}
+                {%- endfor -%}
+              {%- endfor -%}
+              {%- set _ = out.extend(free if free | length > 0 else every) -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ out }}
+
+    - name: Show the candidates in order
+      ansible.builtin.debug:
+        msg: >-
+          {{ server_candidates | map(attribute='platform.name')
+             | zip(server_candidates | map(attribute='type'), server_candidates | map(attribute='location'))
+             | map('join', ' ') | list }}
+
     - name: Initialize created_servers dict
       ansible.builtin.set_fact:
         created_servers: {}
 
-    - name: Try server types with fallback for each platform
+    - name: Try server type and location candidates for each platform
       ansible.builtin.include_tasks: try_server_types.yml
-      loop: >-
-        {{ molecule_yml.platforms | product(
-             server_type_fallbacks[molecule_yml.platforms[0].server_type]
-             | default([molecule_yml.platforms[0].server_type])
-           ) | list }}
+      loop: "{{ server_candidates }}"
       loop_control:
-        loop_var: _platform_type
+        loop_var: _candidate
+        label: "{{ _candidate.platform.name }} {{ _candidate.type }} {{ _candidate.location }}"
       vars:
-        current_platform: "{{ _platform_type[0] }}"
-        current_server_type: "{{ _platform_type[1] }}"
+        current_platform: "{{ _candidate.platform }}"
+        current_server_type: "{{ _candidate.type }}"
+        current_location: "{{ _candidate.location }}"
 
     - name: Fail if not all servers were created
       ansible.builtin.fail:
