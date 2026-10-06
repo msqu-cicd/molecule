@@ -1,9 +1,9 @@
 ---
-# Try each server type until one succeeds for a given platform
-- name: Try {{ current_server_type }} for {{ current_platform.name }}
+# Try each server type and location candidate until one succeeds for a platform
+- name: Try {{ current_server_type }} in {{ current_location }} for {{ current_platform.name }}
   when: current_platform.name not in (created_servers | default({}))
   block:
-    - name: Create {{ current_platform.name }} with {{ current_server_type }}
+    - name: Create {{ current_platform.name }} with {{ current_server_type }} in {{ current_location }}
       hetzner.hcloud.server:
         name: "{{ current_platform.name }}"
         server_type: "{{ current_server_type }}"
@@ -11,7 +11,7 @@
           - "{{ final_ssh_key_name }}"
           - "michael@eifel"
         image: "{{ current_platform.image }}"
-        location: "{{ current_platform.location | default(omit) }}"
+        location: "{{ current_location | default(omit, true) }}"
         datacenter: "{{ current_platform.datacenter | default(omit) }}"
         labels: "{{ current_platform.labels | default({}) }}"
         user_data: "{{ server_user_data }}"
@@ -31,9 +31,11 @@
 
     - name: Log success
       ansible.builtin.debug:
-        msg: "Created {{ current_platform.name }} with {{ current_server_type }}"
+        msg: "Created {{ current_platform.name }} with {{ current_server_type }} in {{ server_attempt.hcloud_server.location }}"
 
   rescue:
     - name: Log failure, trying next
       ansible.builtin.debug:
-        msg: "{{ current_server_type }} unavailable for {{ current_platform.name }}, trying next..."
+        msg: >-
+          {{ current_server_type }} in {{ current_location }} failed for {{ current_platform.name }}
+          ({{ ansible_failed_result.msg | default('no message') }}), trying next...
