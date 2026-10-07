@@ -1,0 +1,30 @@
+---
+- name: Check the pid file
+  ansible.builtin.stat:
+    path: "{{ guest.pidfile }}"
+  register: guest_pid_stat
+
+- name: Stop QEMU
+  when: guest_pid_stat.stat.exists
+  block:
+    - name: Read the pid
+      ansible.builtin.slurp:
+        src: "{{ guest.pidfile }}"
+      register: guest_pidfile
+
+    # SIGTERM, up to 30 s for a clean exit, then SIGKILL. The daemonized QEMU is
+    # reparented to the container's PID 1 (sleep in CI), which does not reap it,
+    # so a zombie counts as gone; a guest that already exited is fine as well.
+    - name: Terminate QEMU
+      ansible.builtin.shell: |
+        pid={{ guest_pidfile.content | b64decode | trim | quote }}
+        if ! kill "$pid" 2>/dev/null; then exit 0; fi
+        for _ in $(seq 1 30); do
+          state=$(awk '/^State:/ {print $2}' "/proc/$pid/status" 2>/dev/null)
+          if [ -z "$state" ]; then exit 0; fi
+          if [ "$state" = Z ]; then exit 0; fi
+          sleep 1
+        done
+        kill -9 "$pid" 2>/dev/null
+        exit 0
+      changed_when: true

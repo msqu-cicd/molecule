@@ -1,0 +1,213 @@
+---
+# Boots one QEMU guest per platform from an upstream cloud image, inside the job
+# container: /dev/kvm when the runner passes it through, TCG otherwise. SSH goes
+# through a user-mode network port forward on 127.0.0.1, so no bridge, libvirt or
+# host firewall rule is involved. Base images are cached in KVM_IMAGE_CACHE
+# (default /var/cache/molecule-images, a bind mount on the kvm runner) and
+# re-downloaded only when the published checksum changes.
+- name: Create
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  no_log: "{{ molecule_no_log }}"
+  vars:
+    ssh_user: root
+    ssh_id_path: "{{ molecule_ephemeral_directory }}/ssh_key"
+    kvm_work_dir: "{{ lookup('ansible.builtin.env', 'KVM_WORK_DIR') | default(molecule_ephemeral_directory + '/kvm', true) }}"
+    kvm_image_cache: "{{ lookup('ansible.builtin.env', 'KVM_IMAGE_CACHE') | default('/var/cache/molecule-images', true) }}"
+    kvm_distro: "{{ lookup('ansible.builtin.env', 'MOLECULE_DISTRO') }}"
+    # Keys match the Hetzner image names so MOLECULE_DISTRO means the same in both scenarios
+    kvm_images:
+      debian-12:
+        url: https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2
+        checksum: sha512:https://cloud.debian.org/images/cloud/bookworm/latest/SHA512SUMS
+      debian-13:
+        url: https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-amd64.qcow2
+        checksum: sha512:https://cloud.debian.org/images/cloud/trixie/latest/SHA512SUMS
+      ubuntu-24.04:
+        url: https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-amd64.img
+        checksum: sha256:https://cloud-images.ubuntu.com/releases/24.04/release/SHA256SUMS
+      ubuntu-26.04:
+        url: https://cloud-images.ubuntu.com/releases/26.04/release/ubuntu-26.04-server-cloudimg-amd64.img
+        checksum: sha256:https://cloud-images.ubuntu.com/releases/26.04/release/SHA256SUMS
+  tasks:
+    - name: Check the requested image
+      ansible.builtin.assert:
+        that:
+          - kvm_distro in kvm_images
+        fail_msg: "MOLECULE_DISTRO must be one of {{ kvm_images.keys() | list | join(', ') }}, got '{{ kvm_distro }}'"
+        quiet: true
+
+    - name: Check for /dev/kvm
+      ansible.builtin.stat:
+        path: /dev/kvm
+      register: kvm_dev
+
+    - name: Choose the accelerator
+      ansible.builtin.set_fact:
+        kvm_hw_accel: "{{ kvm_dev.stat.exists and kvm_dev.stat.writeable }}"
+
+    - name: Warn when falling back to TCG
+      ansible.builtin.debug:
+        msg: "/dev/kvm is missing or not writable, using TCG (works, but slow)"
+      when: not kvm_hw_accel
+
+    - name: Create the work directory
+      ansible.builtin.file:
+        path: "{{ kvm_work_dir }}"
+        state: directory
+        mode: "0700"
+
+    - name: Use the image cache when it is writable
+      block:
+        - name: Create the image cache directory
+          ansible.builtin.file:
+            path: "{{ kvm_image_cache }}"
+            state: directory
+            mode: "0755"
+      rescue:
+        - name: Fall back to an image directory next to the work directory
+          ansible.builtin.set_fact:
+            kvm_image_cache: "{{ molecule_ephemeral_directory }}/images"
+
+        - name: Create the fallback image directory
+          ansible.builtin.file:
+            path: "{{ kvm_image_cache }}"
+            state: directory
+            mode: "0755"
+
+    - name: Download the cloud image (skipped while the cached copy matches the published checksum)
+      ansible.builtin.get_url:
+        url: "{{ kvm_images[kvm_distro].url }}"
+        dest: "{{ kvm_image_cache }}/{{ kvm_images[kvm_distro].url | basename }}"
+        checksum: "{{ kvm_images[kvm_distro].checksum }}"
+        mode: "0644"
+      register: kvm_base_image
+      retries: 3
+      delay: 10
+      until: kvm_base_image is succeeded
+
+    # The cache is shared between jobs. Each run works on its own copy and checks
+    # it against the published checksum, so a cache entry changed after get_url
+    # verified it (another job, a refresh) can never reach a guest.
+    - name: Fetch the published checksums
+      ansible.builtin.uri:
+        url: "{{ kvm_images[kvm_distro].checksum | regex_replace('^[a-z0-9]+:', '') }}"
+        return_content: true
+      register: kvm_sums
+      retries: 3
+      delay: 5
+      until: kvm_sums is succeeded
+
+    - name: Copy the image into the work directory
+      ansible.builtin.copy:
+        src: "{{ kvm_base_image.dest }}"
+        dest: "{{ kvm_work_dir }}/{{ kvm_base_image.dest | basename }}"
+        remote_src: true
+        mode: "0644"
+      register: kvm_run_image
+
+    - name: Checksum the copy
+      ansible.builtin.stat:
+        path: "{{ kvm_run_image.dest }}"
+        checksum_algorithm: "{{ kvm_images[kvm_distro].checksum | regex_replace(':.*$', '') }}"
+      register: kvm_run_image_stat
+
+    - name: Verify the copy against the published checksum
+      ansible.builtin.assert:
+        that:
+          - kvm_run_image_stat.stat.checksum in kvm_published_sums
+        fail_msg: "{{ kvm_run_image.dest | basename }} does not match {{ kvm_images[kvm_distro].checksum }}"
+        quiet: true
+      vars:
+        kvm_published_sums: "{{ kvm_sums.content | regex_findall('(?m)^([0-9a-f]+)\\s+\\*?' + (kvm_base_image.dest | basename | regex_escape) + '$') }}"
+
+    - name: Create the SSH key
+      community.crypto.openssh_keypair:
+        path: "{{ ssh_id_path }}"
+        type: ed25519
+        mode: "0600"
+      register: kvm_ssh_key
+
+    - name: Start the guests
+      ansible.builtin.include_tasks: create_guest.yml
+      loop: "{{ molecule_yml.platforms }}"
+      loop_control:
+        loop_var: platform
+        index_var: platform_index
+        label: "{{ platform.name }}"
+
+    - name: Dump instance config
+      ansible.builtin.copy:
+        content: |
+          # Molecule managed
+
+          {{ kvm_guests | to_json | from_json | to_yaml }}
+        dest: "{{ molecule_instance_config }}"
+        mode: "0600"
+
+    - name: Wait for the guests
+      block:
+        - name: Wait for the SSH port
+          ansible.builtin.wait_for:
+            host: "{{ item.address }}"
+            port: "{{ item.port }}"
+            search_regex: OpenSSH
+            delay: 5
+            timeout: 300
+          loop: "{{ kvm_guests }}"
+          loop_control:
+            label: "{{ item.instance }}"
+
+        - name: Test the SSH login
+          ansible.builtin.command:
+            argv:
+              - ssh
+              - -o
+              - ConnectTimeout=10
+              - -o
+              - StrictHostKeyChecking=no
+              - -o
+              - UserKnownHostsFile=/dev/null
+              - -o
+              - BatchMode=yes
+              - -o
+              - IdentitiesOnly=yes
+              - -i
+              - "{{ item.identity_file }}"
+              - -p
+              - "{{ item.port }}"
+              - "{{ item.user }}@{{ item.address }}"
+              - whoami
+          loop: "{{ kvm_guests }}"
+          loop_control:
+            label: "{{ item.instance }}"
+          register: ssh_test
+          retries: 30
+          delay: 5
+          until: ssh_test.rc == 0
+          changed_when: false
+      rescue:
+        - name: Read the serial consoles
+          ansible.builtin.command:
+            argv:
+              - tail
+              - -n
+              - "60"
+              - "{{ item.serial_log }}"
+          loop: "{{ kvm_guests }}"
+          loop_control:
+            label: "{{ item.instance }}"
+          register: serial_tail
+          changed_when: false
+
+        - name: Show the serial consoles
+          ansible.builtin.debug:
+            msg: "{{ item.stdout_lines }}"
+          loop: "{{ serial_tail.results }}"
+          loop_control:
+            label: "{{ item.item.instance }}"
+
+        - name: Fail after showing the consoles
+          ansible.builtin.fail:
+            msg: "guest did not become reachable over SSH, see the serial console above"
