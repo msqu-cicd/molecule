@@ -1,0 +1,104 @@
+---
+# One platform: qcow2 overlay on the cached base image, cloud-init NoCloud seed
+# with the generated root key, QEMU daemonized with a pid file and a serial log.
+- name: Set guest facts
+  ansible.builtin.set_fact:
+    guest_name: "{{ platform.name }}"
+    guest_port: "{{ (platform.ssh_port | default(2222) | int) + platform_index }}"
+    guest_disk: "{{ kvm_work_dir }}/{{ platform.name }}.qcow2"
+    guest_seed: "{{ kvm_work_dir }}/{{ platform.name }}-seed.iso"
+    guest_seed_dir: "{{ kvm_work_dir }}/{{ platform.name }}-seed"
+    guest_pidfile: "{{ kvm_work_dir }}/{{ platform.name }}.pid"
+    guest_serial_log: "{{ kvm_work_dir }}/{{ platform.name }}-serial.log"
+
+- name: Create the disk overlay
+  ansible.builtin.command:
+    argv:
+      - qemu-img
+      - create
+      - -q
+      - -f
+      - qcow2
+      - -b
+      - "{{ kvm_base_image.dest }}"
+      - -F
+      - qcow2
+      - "{{ guest_disk }}"
+      - "{{ platform.disk | default('10G') }}"
+    creates: "{{ guest_disk }}"
+
+- name: Create the seed directory
+  ansible.builtin.file:
+    path: "{{ guest_seed_dir }}"
+    state: directory
+    mode: "0700"
+
+- name: Write cloud-init user-data
+  ansible.builtin.copy:
+    dest: "{{ guest_seed_dir }}/user-data"
+    mode: "0600"
+    content: |
+      #cloud-config
+      hostname: {{ guest_name }}
+      manage_etc_hosts: true
+      disable_root: false
+      ssh_pwauth: false
+      users:
+        - name: root
+          ssh_authorized_keys:
+            - {{ kvm_ssh_key.public_key }}
+      # the role under test owns the package state
+      package_update: false
+      package_upgrade: false
+
+- name: Write cloud-init meta-data
+  ansible.builtin.copy:
+    dest: "{{ guest_seed_dir }}/meta-data"
+    mode: "0600"
+    content: |
+      instance-id: {{ guest_name }}-{{ lookup('ansible.builtin.pipe', 'date +%s') }}
+      local-hostname: {{ guest_name }}
+
+- name: Build the seed image
+  ansible.builtin.command:
+    argv:
+      - genisoimage
+      - -quiet
+      - -output
+      - "{{ guest_seed }}"
+      - -volid
+      - cidata
+      - -joliet
+      - -rock
+      - "{{ guest_seed_dir }}/user-data"
+      - "{{ guest_seed_dir }}/meta-data"
+    creates: "{{ guest_seed }}"
+
+- name: Start the guest
+  ansible.builtin.command:
+    argv: >-
+      {{ ['qemu-system-x86_64', '-name', guest_name, '-machine', 'q35']
+         + (['-accel', 'kvm', '-cpu', 'host'] if kvm_hw_accel else ['-accel', 'tcg', '-cpu', 'max'])
+         + ['-m', platform.memory | default(2048) | string,
+            '-smp', platform.vcpus | default(2) | string,
+            '-display', 'none', '-monitor', 'none', '-daemonize',
+            '-pidfile', guest_pidfile,
+            '-serial', 'file:' + guest_serial_log,
+            '-drive', 'if=virtio,format=qcow2,file=' + guest_disk,
+            '-drive', 'if=virtio,format=raw,readonly=on,file=' + guest_seed,
+            '-netdev', 'user,id=net0,hostfwd=tcp:127.0.0.1:' + (guest_port | string) + '-:22',
+            '-device', 'virtio-net-pci,netdev=net0',
+            '-rtc', 'base=utc'] }}
+    creates: "{{ guest_pidfile }}"
+
+- name: Remember the guest
+  ansible.builtin.set_fact:
+    kvm_guests: >-
+      {{ kvm_guests | default([]) + [{
+           'instance': guest_name,
+           'address': '127.0.0.1',
+           'user': ssh_user,
+           'port': guest_port | int,
+           'identity_file': ssh_id_path,
+           'pidfile': guest_pidfile,
+           'serial_log': guest_serial_log }] }}

@@ -33,6 +33,32 @@ Optimized molecule scenario for Hetzner Cloud infrastructure testing with the fo
 - Automatic cleanup of all resources after testing
 - Labels applied: `environment: molecule`, `project: <project-name>`, `managed-by: molecule`
 
+## KVM (local QEMU)
+
+Boots upstream cloud images as QEMU guests inside the job container, on the runner with the `kvm` label
+(its runner passes `/dev/kvm` and an exec tmpfs into unprivileged, network-isolated job containers).
+No cloud account, no bridge, no libvirt: the guest's sshd is reached through a user-mode network port
+forward on `127.0.0.1`, so the scenario also runs on any workstation with `/dev/kvm` and falls back to
+TCG (works, but slow) without it.
+
+### Environment Variables
+- `MOLECULE_DISTRO`: `debian-12`, `debian-13`, `ubuntu-24.04` or `ubuntu-26.04` (same names as the Hetzner
+  images; the genericcloud/cloudimg qcow2 behind them is verified against the published checksums)
+- `KVM_MEMORY` (default `2048` MiB), `KVM_VCPUS` (`2`), `KVM_DISK` (`10G`), `KVM_SSH_PORT` (`2222`; platform
+  N of a multi-node scenario uses `KVM_SSH_PORT + N`)
+- `KVM_IMAGE_CACHE`: base image directory (default `/var/cache/molecule-images`, bind-mounted from the runner
+  host by `role-kvm.yml`); a path that cannot be created falls back to molecule's ephemeral directory
+- `KVM_WORK_DIR`: overlays, seeds, pid files and serial logs (default: molecule's ephemeral directory; CI
+  uses the runner's `/tmp` tmpfs)
+
+### Guests
+- q35 machine, `-accel kvm -cpu host`, one qcow2 overlay per platform on the cached base image
+- cloud-init NoCloud seed with a per-run root key (`disable_root: false`, no password login)
+- the serial console is printed when a guest does not become reachable over SSH
+- `destroy` sends SIGTERM to each QEMU and removes the work directory
+- needs `qemu-system-x86`, `qemu-utils` and `genisoimage` in the job container; `role-kvm.yml` installs
+  them when the runner image does not ship them
+
 ## Vultr
 
 Used by roles that need distributions Hetzner does not offer (Arch Linux workstations).
@@ -69,7 +95,7 @@ reusable workflow in this repository, see [examples/caller-molecule.yml](example
 ```yaml
 jobs:
   molecule:
-    uses: CICD/molecule/.gitea/workflows/role-hetznercloud.yml@main   # or role-vultr.yml
+    uses: CICD/molecule/.gitea/workflows/role-hetznercloud.yml@main   # or role-kvm.yml, role-vultr.yml
     with:
       force_run: ${{ format('{0}', inputs.force_run) }}
       molecule_debug: ${{ format('{0}', inputs.molecule_debug) }}
@@ -104,6 +130,14 @@ chains run in parallel and it takes `MOLECULE_AWS_ACCESS_KEY_ID`/`MOLECULE_AWS_S
 `role-vultr.yml` has the same inputs except `unit`/`integration`/`*_distro` (it runs one integration job,
 `distro` defaults to `Arch Linux x64`) and takes `VULTR_API_KEY` instead of the Hetzner secrets.
 
+### role-kvm.yml
+
+Same inputs and secrets as `role-hetznercloud.yml`, except `instance_size`, which becomes `kvm_memory`
+(default `'2048'`) and `kvm_vcpus` (`'2'`); `debian_distro`/`ubuntu_distro` name cloud images
+(`debian-12`/`debian-13`, `ubuntu-24.04`/`ubuntu-26.04`). The test jobs run on the `kvm` runner, lint stays on
+`molecule`, and there is no cleanup job because the guests die with the job container. `HCLOUD_TOKEN` and
+`HETZNER_DNS_TOKEN` are accepted but unused, so a caller switches by changing only its `uses:` line.
+
 ### Pipeline
 
 1. **changes**: skip the tests when only ignored files changed (deletions count as changes)
@@ -128,6 +162,7 @@ Runs of one repo share the concurrency group `molecule-tests`; a new run cancels
 molecule test                              # basic test
 HCLOUD_PRIVATE_NET=true molecule test      # with private networking
 INSTANCE_SIZE=cx33 molecule test           # different server type
+MOLECULE_DISTRO=debian-13 KVM_IMAGE_CACHE=~/.cache/molecule-images molecule test   # kvm scenario, needs /dev/kvm
 ```
 
 `examples/Makefile` copies a scenario into a role and runs molecule with the same environment as CI.

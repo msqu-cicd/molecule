@@ -1,0 +1,33 @@
+---
+- name: Destroy
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  no_log: "{{ molecule_no_log }}"
+  vars:
+    kvm_work_dir: "{{ lookup('ansible.builtin.env', 'KVM_WORK_DIR') | default(molecule_ephemeral_directory + '/kvm', true) }}"
+  tasks:
+    - name: Populate the instance config
+      ansible.builtin.set_fact:
+        instance_conf: "{{ (lookup('ansible.builtin.file', molecule_instance_config, errors='ignore') or '[]') | from_yaml }}"
+
+    - name: Stop the guests
+      ansible.builtin.include_tasks: destroy_guest.yml
+      loop: "{{ instance_conf if instance_conf is sequence and instance_conf is not string else [] }}"
+      loop_control:
+        loop_var: guest
+        label: "{{ guest.instance }}"
+
+    - name: Remove the work directory
+      ansible.builtin.file:
+        path: "{{ kvm_work_dir }}"
+        state: absent
+
+    - name: Dump instance config
+      ansible.builtin.copy:
+        content: |
+          # Molecule managed
+
+          {{ {} | to_yaml }}
+        dest: "{{ molecule_instance_config }}"
+        mode: "0600"
