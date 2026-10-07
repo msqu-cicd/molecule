@@ -87,6 +87,41 @@
       delay: 10
       until: kvm_base_image is succeeded
 
+    # The cache is shared between jobs. Each run works on its own copy and checks
+    # it against the published checksum, so a cache entry changed after get_url
+    # verified it (another job, a refresh) can never reach a guest.
+    - name: Fetch the published checksums
+      ansible.builtin.uri:
+        url: "{{ kvm_images[kvm_distro].checksum | regex_replace('^[a-z0-9]+:', '') }}"
+        return_content: true
+      register: kvm_sums
+      retries: 3
+      delay: 5
+      until: kvm_sums is succeeded
+
+    - name: Copy the image into the work directory
+      ansible.builtin.copy:
+        src: "{{ kvm_base_image.dest }}"
+        dest: "{{ kvm_work_dir }}/{{ kvm_base_image.dest | basename }}"
+        remote_src: true
+        mode: "0644"
+      register: kvm_run_image
+
+    - name: Checksum the copy
+      ansible.builtin.stat:
+        path: "{{ kvm_run_image.dest }}"
+        checksum_algorithm: "{{ kvm_images[kvm_distro].checksum | regex_replace(':.*$', '') }}"
+      register: kvm_run_image_stat
+
+    - name: Verify the copy against the published checksum
+      ansible.builtin.assert:
+        that:
+          - kvm_run_image_stat.stat.checksum in kvm_published_sums
+        fail_msg: "{{ kvm_run_image.dest | basename }} does not match {{ kvm_images[kvm_distro].checksum }}"
+        quiet: true
+      vars:
+        kvm_published_sums: "{{ kvm_sums.content | regex_findall('(?m)^([0-9a-f]+)\\s+\\*?' + (kvm_base_image.dest | basename | regex_escape) + '$') }}"
+
     - name: Create the SSH key
       community.crypto.openssh_keypair:
         path: "{{ ssh_id_path }}"

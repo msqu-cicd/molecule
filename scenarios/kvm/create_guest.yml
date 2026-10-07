@@ -20,7 +20,7 @@
       - -f
       - qcow2
       - -b
-      - "{{ kvm_base_image.dest }}"
+      - "{{ kvm_run_image.dest }}"
       - -F
       - qcow2
       - "{{ guest_disk }}"
