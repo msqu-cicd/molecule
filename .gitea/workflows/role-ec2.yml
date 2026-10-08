@@ -90,7 +90,7 @@ jobs:
   lint:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:4e04bf90251e6f9cff6f9fd7226bee72c23b54e85f4c2156e4f9ea03e6b3a7f6
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:9552061b225df3fc5dc13b5827cefaf14c46876e1709dae6ac0932743c1d04f4
     needs: changes
     if: needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true'
     steps:
@@ -106,7 +106,7 @@ jobs:
   molecule-unit-debian:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:4e04bf90251e6f9cff6f9fd7226bee72c23b54e85f4c2156e4f9ea03e6b3a7f6
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:9552061b225df3fc5dc13b5827cefaf14c46876e1709dae6ac0932743c1d04f4
     needs: [changes, lint]
     if: (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && inputs.unit == 'true'
     env:
@@ -232,7 +232,7 @@ jobs:
   molecule-unit-ubuntu:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:4e04bf90251e6f9cff6f9fd7226bee72c23b54e85f4c2156e4f9ea03e6b3a7f6
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:9552061b225df3fc5dc13b5827cefaf14c46876e1709dae6ac0932743c1d04f4
     needs: [changes, lint]
     if: (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && inputs.unit == 'true'
     env:
@@ -358,7 +358,7 @@ jobs:
   molecule-integration-debian:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:4e04bf90251e6f9cff6f9fd7226bee72c23b54e85f4c2156e4f9ea03e6b3a7f6
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:9552061b225df3fc5dc13b5827cefaf14c46876e1709dae6ac0932743c1d04f4
     needs: [changes, lint, molecule-unit-debian]
     if: always() && (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && inputs.integration == 'true' && (needs.molecule-unit-debian.result == 'success' || inputs.unit != 'true')
     env:
@@ -491,7 +491,7 @@ jobs:
   molecule-integration-ubuntu:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:4e04bf90251e6f9cff6f9fd7226bee72c23b54e85f4c2156e4f9ea03e6b3a7f6
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:9552061b225df3fc5dc13b5827cefaf14c46876e1709dae6ac0932743c1d04f4
     needs: [changes, lint, molecule-unit-ubuntu]
     if: always() && (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && inputs.integration == 'true' && (needs.molecule-unit-ubuntu.result == 'success' || inputs.unit != 'true')
     env:
@@ -626,7 +626,7 @@ jobs:
   molecule-cleanup:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:4e04bf90251e6f9cff6f9fd7226bee72c23b54e85f4c2156e4f9ea03e6b3a7f6
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:9552061b225df3fc5dc13b5827cefaf14c46876e1709dae6ac0932743c1d04f4
     if: always() && (inputs.unit == 'true' || inputs.integration == 'true')
     needs: [molecule-unit-debian, molecule-unit-ubuntu, molecule-integration-debian, molecule-integration-ubuntu]
     steps:
