@@ -93,7 +93,7 @@ jobs:
   lint:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:acc03a1111b95c7abc1e924fae74a50c78d2e5fd3d036b7d484f080d40ea7b01
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:0b3b02149e98bac1f459f8e7ec837f91a7903da7cf24b0624d49b9b753d1c125
     needs: changes
     if: needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true'
     steps:
@@ -109,7 +109,7 @@ jobs:
   molecule-unit-debian:
     runs-on: kvm
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:acc03a1111b95c7abc1e924fae74a50c78d2e5fd3d036b7d484f080d40ea7b01
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:0b3b02149e98bac1f459f8e7ec837f91a7903da7cf24b0624d49b9b753d1c125
       volumes:
         # base image cache on the runner host (any host path is allowed by the runner config)
         - /var/cache/molecule-images:/var/cache/molecule-images
@@ -223,7 +223,7 @@ jobs:
   molecule-unit-ubuntu:
     runs-on: kvm
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:acc03a1111b95c7abc1e924fae74a50c78d2e5fd3d036b7d484f080d40ea7b01
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:0b3b02149e98bac1f459f8e7ec837f91a7903da7cf24b0624d49b9b753d1c125
       volumes:
         # base image cache on the runner host (any host path is allowed by the runner config)
         - /var/cache/molecule-images:/var/cache/molecule-images
@@ -337,7 +337,7 @@ jobs:
   molecule-integration-debian:
     runs-on: kvm
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:acc03a1111b95c7abc1e924fae74a50c78d2e5fd3d036b7d484f080d40ea7b01
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:0b3b02149e98bac1f459f8e7ec837f91a7903da7cf24b0624d49b9b753d1c125
       volumes:
         # base image cache on the runner host (any host path is allowed by the runner config)
         - /var/cache/molecule-images:/var/cache/molecule-images
@@ -458,7 +458,7 @@ jobs:
   molecule-integration-ubuntu:
     runs-on: kvm
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:acc03a1111b95c7abc1e924fae74a50c78d2e5fd3d036b7d484f080d40ea7b01
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:0b3b02149e98bac1f459f8e7ec837f91a7903da7cf24b0624d49b9b753d1c125
       volumes:
         # base image cache on the runner host (any host path is allowed by the runner config)
         - /var/cache/molecule-images:/var/cache/molecule-images
