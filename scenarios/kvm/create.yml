@@ -30,6 +30,10 @@
       ubuntu-26.04:
         url: https://cloud-images.ubuntu.com/releases/26.04/release/ubuntu-26.04-server-cloudimg-amd64.img
         checksum: sha256:https://cloud-images.ubuntu.com/releases/26.04/release/SHA256SUMS
+      # No Hetzner image exists for Arch; the name follows Vultr's family
+      archlinux:
+        url: https://geo.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2
+        checksum: sha256:https://geo.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2.SHA256
   tasks:
     - name: Check the requested image
       ansible.builtin.assert:
