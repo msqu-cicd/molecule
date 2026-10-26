@@ -72,7 +72,7 @@ jobs:
   lint:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:bbb17debf356725826feb7f34eb6d6cf2e40b096fe88bd41c132d42af7ada652
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:4e6e9154307b03d8fd5cc2cf914ada57e3eec5886a64b9a20efb83c1bb2c47ef
     needs: changes
     if: needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true'
     steps:
@@ -88,7 +88,7 @@ jobs:
   molecule-integration:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:bbb17debf356725826feb7f34eb6d6cf2e40b096fe88bd41c132d42af7ada652
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:4e6e9154307b03d8fd5cc2cf914ada57e3eec5886a64b9a20efb83c1bb2c47ef
     needs: [changes, lint]
     if: (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true')
     env:
@@ -199,7 +199,7 @@ jobs:
   molecule-cleanup:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:bbb17debf356725826feb7f34eb6d6cf2e40b096fe88bd41c132d42af7ada652
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:4e6e9154307b03d8fd5cc2cf914ada57e3eec5886a64b9a20efb83c1bb2c47ef
     if: always()
     needs: [molecule-integration]
     env:
