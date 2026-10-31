@@ -147,7 +147,8 @@ Same inputs and secrets as `role-hetznercloud.yml`, except `instance_size`, whic
 5. **cleanup** (always, also after failures/cancellations): deletes leftover servers and DNS records,
    then a safety net deletes CI servers of any repo older than 3 hours
 
-Runs of one repo share the concurrency group `molecule-tests`; a new run cancels the running one.
+Runs of one repo share the concurrency group `molecule-tests`, because the server and DNS names are
+`molecule-<repo>`. A new run waits for the running one instead of cancelling it (`cancel-in-progress: false`).
 
 ## Testing changes to this repository
 

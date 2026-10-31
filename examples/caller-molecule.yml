@@ -33,9 +33,11 @@ on:
       - 'README.md'
       - 'renovate.json'
 
+# One run per repository at a time: the Hetzner server and DynDNS names are
+# molecule-<repo>. Queue instead of cancelling, so no run is killed mid-converge.
 concurrency:
   group: molecule-tests
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   molecule:
