@@ -42,8 +42,9 @@ concurrency:
 jobs:
   molecule:
     # Shared workflow, see https://git.msqu.de/CICD/molecule (README: caller template)
-    # role-kvm.yml runs the same pipeline as local QEMU guests on the kvm runner
-    uses: CICD/molecule/.gitea/workflows/role-hetznercloud.yml@main
+    # QEMU guests on the kvm runner; role-hetznercloud.yml only for roles the kvm runner cannot test
+    # (multi-node scenarios such as k3s and rke2)
+    uses: CICD/molecule/.gitea/workflows/role-kvm.yml@main
     with:
       # format() turns booleans and strings alike into 'true'/'false' ('' on push/PR)
       force_run: ${{ format('{0}', inputs.force_run) }}

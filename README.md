@@ -96,7 +96,7 @@ reusable workflow in this repository, see [examples/caller-molecule.yml](example
 ```yaml
 jobs:
   molecule:
-    uses: CICD/molecule/.gitea/workflows/role-hetznercloud.yml@main   # or role-kvm.yml, role-vultr.yml
+    uses: CICD/molecule/.gitea/workflows/role-kvm.yml@main   # or role-hetznercloud.yml, role-vultr.yml
     with:
       force_run: ${{ format('{0}', inputs.force_run) }}
       molecule_debug: ${{ format('{0}', inputs.molecule_debug) }}
@@ -112,16 +112,17 @@ string like `"false"` is truthy in expressions.
 
 ### role-hetznercloud.yml
 
+For roles the kvm runner cannot test, e.g. multi-node scenarios whose servers must reach each other
+(k3s, rke2). Every other role uses `role-kvm.yml`.
+
 | Input | Default | Description |
 |-------|---------|-------------|
 | `force_run` | `'false'` | Run even if only ignored files changed |
 | `molecule_debug` | `'false'` | Open a tmate session before the tests |
 | `args` | `''` | Extra `molecule test` arguments |
 | `unit` / `integration` | `'true'` | Switch the unit / integration jobs (both `'false'` = lint only) |
-| `debian_distro` | `debian-13` | Image for both jobs (the kvm unit test takes `debian-12` or `debian-13`) |
-| `unit_driver` | `kvm` | `kvm`: unit test as a QEMU guest on the `kvm` runner; `hetznercloud`: on Hetzner, for multi-node scenarios whose servers must reach each other (k3s, rke2) |
-| `kvm_memory` / `kvm_vcpus` | `'2048'` / `'2'` | Guest size of the kvm unit test |
-| `instance_size` | scenario default | Hetzner server type of the integration test |
+| `debian_distro` | `debian-13` | Hetzner image |
+| `instance_size` | scenario default | Server type |
 | `extra_files_ignore` | `''` | Additional changed-files ignore patterns |
 | `molecule_ref` | `main` | Ref of this repo to take the scenario from |
 
@@ -135,8 +136,9 @@ chains run in parallel and it takes `MOLECULE_AWS_ACCESS_KEY_ID`/`MOLECULE_AWS_S
 
 ### role-kvm.yml
 
-Same inputs and secrets as `role-hetznercloud.yml`, except `instance_size` and `unit_driver`;
-`debian_distro` names the cloud image (`debian-12`/`debian-13`). Unit and integration both run on the `kvm` runner, lint stays on
+The default for roles. Same inputs and secrets as `role-hetznercloud.yml`, except `instance_size`, which
+becomes `kvm_memory` (default `'2048'`) and `kvm_vcpus` (`'2'`); `debian_distro` names the cloud image
+(`debian-12`/`debian-13`). Unit and integration both run on the `kvm` runner (node.bastelpappe.de, capacity 2), lint stays on
 `molecule`, and there is no cleanup job because the guests die with the job container. `HCLOUD_TOKEN` and
 `HETZNER_DNS_TOKEN` are accepted but unused, so a caller switches by changing only its `uses:` line.
 
@@ -144,15 +146,14 @@ Same inputs and secrets as `role-hetznercloud.yml`, except `instance_size` and `
 
 1. **changes**: skip the tests when only ignored files changed (deletions count as changes)
 2. **lint**: ansible-lint and yamllint
-3. **unit** (Debian 13): role with `tests/vars.yml`, as a QEMU guest on the `kvm` runner (`unit_driver: kvm`,
-   the default) or on Hetzner (`unit_driver: hetznercloud`, multi-node scenarios)
-4. **integration** (Debian 13, Hetzner): role with the infra `group_vars`
-5. **cleanup** (always, also after failures/cancellations): deletes leftover servers and DNS records,
-   then a safety net deletes CI servers of any repo older than 3 hours
+3. **unit** (Debian 13): role with `tests/vars.yml`
+4. **integration** (Debian 13): role with the infra `group_vars`
+5. **cleanup** (hetznercloud only; always, also after failures/cancellations): deletes leftover servers and
+   DNS records, then a safety net deletes CI servers of any repo older than 3 hours
 
 The fleet runs Debian 13 only, so there are no Ubuntu jobs. Pushes to the default branch (merges, already
-tested in their pull request) run lint and the kvm unit test only; the Hetzner jobs run on pull requests and
-manual dispatches.
+tested in their pull request) skip the integration test: `role-kvm.yml` runs lint and the unit test,
+`role-hetznercloud.yml` lint only, so a merge starts no Hetzner server.
 
 Runs of one repo share the concurrency group `molecule-tests`, because the server and DNS names are
 `molecule-<repo>`. A new run waits for the running one instead of cancelling it (`cancel-in-progress: false`).

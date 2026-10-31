@@ -1,6 +1,8 @@
 # Reusable molecule workflow for Ansible roles (kvm scenario: QEMU guests inside the job
-# container on the `kvm` runner, no cloud account involved). Same inputs as
-# role-hetznercloud.yml except instance_size, which becomes kvm_memory/kvm_vcpus.
+# container on the `kvm` runner, no cloud account involved), Debian only; the default for roles.
+# Same inputs as role-hetznercloud.yml except instance_size, which becomes kvm_memory/kvm_vcpus.
+# Pushes to the default branch (merges, already tested in their pull request) run lint and the
+# unit test only.
 # Called from each role's .gitea/workflows/molecule.yml; see README.md for the caller template.
 name: Molecule (kvm)
 
@@ -224,7 +226,7 @@ jobs:
         # base image cache on the runner host (any host path is allowed by the runner config)
         - /var/cache/molecule-images:/var/cache/molecule-images
     needs: [changes, lint, molecule-unit-debian]
-    if: always() && (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && inputs.integration == 'true' && (needs.molecule-unit-debian.result == 'success' || inputs.unit != 'true')
+    if: always() && github.event_name != 'push' && (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && inputs.integration == 'true' && (needs.molecule-unit-debian.result == 'success' || inputs.unit != 'true')
     env:
       TEST_TYPE: integration
       MOLECULE_DISTRO: ${{ inputs.debian_distro }}
