@@ -25,9 +25,9 @@ CI_PROJECT_DIR := $(shell pwd)
 MOLECULE_PROJECT_DIR := $(shell dirname $(CI_PROJECT_DIR))
 CI_PROJECT_NAME_MOLECULE := $(shell echo $(CI_PROJECT_NAME) | tr '_' '-')
 
-# Molecule state, kept from converge until test or destroy cleans up, so that
-# verify and login find the instance
-MOLECULE_CACHE_DIR := /tmp/molecule-cache-$(CI_PROJECT_NAME_MOLECULE)
+# Molecule state (instance SSH access included), kept from converge until test or
+# destroy cleans up, so that verify and login find the instance. Owner-only, per user.
+MOLECULE_CACHE_DIR := $(HOME)/.cache/molecule-make/$(CI_PROJECT_NAME_MOLECULE)
 
 # ============================================================================
 # Exported Environment Variables
@@ -49,6 +49,7 @@ export MOLECULE_EPHEMERAL_DIRECTORY := $(MOLECULE_CACHE_DIR)/.cache/
 .prepare:
 	@echo "Preparing molecule scenario files..."
 	@mkdir -p $(CI_PROJECT_DIR)/molecule/default/
+	@install -d -m 0700 $(MOLECULE_CACHE_DIR)
 	@tmp=$$(mktemp -d /tmp/molecule-git.XXXXXXXX) && trap 'rm -rf "$$tmp"' EXIT && \
 		git clone --depth 1 --quiet $(MOLECULE_GIT_REPO) "$$tmp/molecule" && \
 		rsync -azh --ignore-existing "$$tmp/molecule/scenarios/$(DRIVER)/" $(CI_PROJECT_DIR)/molecule/default/
