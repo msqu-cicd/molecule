@@ -10,6 +10,8 @@
     guest_seed_dir: "{{ kvm_work_dir }}/{{ platform.name }}-seed"
     guest_pidfile: "{{ kvm_work_dir }}/{{ platform.name }}.pid"
     guest_serial_log: "{{ kvm_work_dir }}/{{ platform.name }}-serial.log"
+    # fixed per platform so network-config can match it
+    guest_mac: "52:54:00:00:00:{{ '%02x' | format(platform_index | int + 16) }}"
 
 - name: Create the disk overlay
   ansible.builtin.command:
@@ -59,6 +61,21 @@
       instance-id: {{ guest_name }}-{{ lookup('ansible.builtin.pipe', 'date +%s') }}
       local-hostname: {{ guest_name }}
 
+# The servers and the Hetzner images name the NIC eth0 (net.ifnames=0); without this the
+# cloud image names it after the PCI slot (enp0s2) and roles that configure eth0 fail.
+- name: Write cloud-init network-config
+  ansible.builtin.copy:
+    dest: "{{ guest_seed_dir }}/network-config"
+    mode: "0600"
+    content: |
+      version: 2
+      ethernets:
+        eth0:
+          match:
+            macaddress: "{{ guest_mac }}"
+          set-name: eth0
+          dhcp4: true
+
 - name: Build the seed image
   ansible.builtin.command:
     argv:
@@ -72,6 +89,7 @@
       - -rock
       - "{{ guest_seed_dir }}/user-data"
       - "{{ guest_seed_dir }}/meta-data"
+      - "{{ guest_seed_dir }}/network-config"
     creates: "{{ guest_seed }}"
 
 - name: Start the guest
@@ -87,7 +105,7 @@
             '-drive', 'if=virtio,format=qcow2,file=' + guest_disk,
             '-drive', 'if=virtio,format=raw,readonly=on,file=' + guest_seed,
             '-netdev', 'user,id=net0,hostfwd=tcp:127.0.0.1:' + (guest_port | string) + '-:22',
-            '-device', 'virtio-net-pci,netdev=net0',
+            '-device', 'virtio-net-pci,netdev=net0,mac=' + guest_mac,
             '-rtc', 'base=utc'] }}
     creates: "{{ guest_pidfile }}"
 
