@@ -155,6 +155,12 @@ The fleet runs Debian 13 only, so there are no Ubuntu jobs. Pushes to the defaul
 tested in their pull request) skip the integration test: `role-kvm.yml` runs lint and the unit test,
 `role-hetznercloud.yml` lint only, so a merge starts no Hetzner server.
 
+A push that its pull request already tested skips lint and tests entirely: the `changes` job checks whether
+the pushed commit is a merge whose tree equals the pull request head (the pull request was up to date with
+the target branch) or a fast-forward to that head, and whether the caller's `molecule (pull_request)` status
+of that head is `success`. Merges after the target branch moved, squash merges, direct pushes and failed
+lookups run as above.
+
 Runs of one repo share the concurrency group `molecule-tests`, because the server and DNS names are
 `molecule-<repo>`. A new run waits for the running one instead of cancelling it (`cancel-in-progress: false`).
 

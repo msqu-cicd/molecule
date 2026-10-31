@@ -49,13 +49,48 @@ jobs:
   changes:
     runs-on: ubuntu-26.04
     outputs:
-      any_modified: ${{ steps.changed.outputs.any_modified }}
+      # a push its pull request already tested counts as unchanged: lint and tests skip
+      any_modified: ${{ steps.tested.outputs.tested == 'true' && 'false' || steps.changed.outputs.any_modified }}
     steps:
       - name: Checkout repository
         uses: https://github.com/actions/checkout@v7
+        with:
+          # the merge commit and its parents
+          fetch-depth: 2
+
+      # A merge commit whose tree equals its second parent (the pull request head, up to date with
+      # the target branch) or a fast-forward to the head itself adds nothing the pull request run
+      # did not test. Any other push, or a failed lookup, runs the tests.
+      - name: Detect a push its pull request already tested
+        id: tested
+        if: github.event_name == 'push'
+        env:
+          API: https://git.msqu.de/api/v1/repos/${{ github.repository }}
+          TOKEN: ${{ secrets.CI_RUNNER_PAT }}
+        run: |
+          tested=false
+          candidate=$(git rev-parse HEAD)
+          if second=$(git rev-parse -q --verify 'HEAD^2^{commit}'); then
+            if [ "$(git rev-parse 'HEAD^{tree}')" = "$(git rev-parse 'HEAD^2^{tree}')" ]; then
+              candidate=$second
+            else
+              candidate=
+            fi
+          fi
+          if [ -n "$candidate" ]; then
+            # the caller job's status sums up the whole molecule run of the pull request
+            state=$(curl -fsS -H "Authorization: token $TOKEN" "$API/commits/$candidate/status" |
+              jq -r '[.statuses[]? | select(.context | endswith("/ molecule (pull_request)")) | .status] | first // empty') || state=
+            echo "pull request run of $candidate: ${state:-none}"
+            if [ "$state" = success ]; then
+              tested=true
+            fi
+          fi
+          echo "tested=$tested" >> "$GITHUB_OUTPUT"
 
       # any_modified also counts deleted files (any_changed does not)
       - id: changed
+        if: steps.tested.outputs.tested != 'true'
         uses: https://github.com/tj-actions/changed-files@9426d40962ed5378910ee2e21d5f8c6fcbf2dd96  # v47.0.6
         with:
           files_ignore: |
