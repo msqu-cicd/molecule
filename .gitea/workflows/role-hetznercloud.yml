@@ -1,4 +1,7 @@
-# Reusable molecule workflow for Ansible roles (hetznercloud scenario).
+# Reusable molecule workflow for Ansible roles: Debian only, unit test on the kvm runner (QEMU
+# guest, kvm scenario), integration test on Hetzner Cloud (hetznercloud scenario). Pushes to the
+# default branch (merges) run lint and the kvm unit test only; Hetzner runs on pull requests and
+# manual dispatches.
 # Called from each role's .gitea/workflows/molecule.yml; see README.md for the caller template.
 name: Molecule (hetznercloud)
 
@@ -26,13 +29,21 @@ on:
         type: string
         default: 'true'
       debian_distro:
-        description: Hetzner image for the Debian jobs
+        description: Debian image (Hetzner image name; the kvm scenario takes debian-12 or debian-13)
         type: string
         default: debian-13
-      ubuntu_distro:
-        description: Hetzner image for the Ubuntu jobs
+      unit_driver:
+        description: Where the unit test runs, 'kvm' (QEMU guest on the kvm runner) or 'hetznercloud' (multi-node scenarios whose servers must reach each other)
         type: string
-        default: ubuntu-26.04
+        default: kvm
+      kvm_memory:
+        description: Guest memory in MiB for the kvm unit test
+        type: string
+        default: '2048'
+      kvm_vcpus:
+        description: Guest vCPUs for the kvm unit test
+        type: string
+        default: '2'
       instance_size:
         description: Server type/plan, empty uses the scenario default
         type: string
@@ -99,18 +110,23 @@ jobs:
       - name: Yaml Lint
         run: yamllint -f colored .
 
-  molecule-unit-debian:
-    runs-on: molecule
+  molecule-unit-kvm:
+    runs-on: kvm
     container:
       image: ghcr.io/msqu-devops/molecule:runner@sha256:a5afe0d813f4c069aed85b411fabb02a8e08c0b606a424624998e2afc93abdf6
+      volumes:
+        # base image cache on the runner host (any host path is allowed by the runner config)
+        - /var/cache/molecule-images:/var/cache/molecule-images
     needs: [changes, lint]
-    if: (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && inputs.unit == 'true'
+    if: (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && inputs.unit == 'true' && inputs.unit_driver != 'hetznercloud'
     env:
       TEST_TYPE: unit
-      HCLOUD_SERVER_STATE: stopped
       MOLECULE_DISTRO: ${{ inputs.debian_distro }}
-      MOLECULE_SCENARIO_NAME: hetznercloud
-      INSTANCE_SIZE: ${{ inputs.instance_size }}
+      MOLECULE_SCENARIO_NAME: kvm
+      KVM_MEMORY: ${{ inputs.kvm_memory }}
+      KVM_VCPUS: ${{ inputs.kvm_vcpus }}
+      # exec tmpfs provided by the kvm runner; disks and seeds of the run live here
+      KVM_WORK_DIR: /tmp/molecule-kvm
     steps:
       - name: Checkout repository
         uses: https://github.com/actions/checkout@v7
@@ -148,7 +164,7 @@ jobs:
           path: git_molecule
           ref: ${{ inputs.molecule_ref }}
           sparse-checkout: |
-            scenarios/hetznercloud
+            scenarios/kvm
 
       - name: Prepare Ansible Vault
         env:
@@ -159,7 +175,7 @@ jobs:
         run: |
           mkdir -p ${GITHUB_WORKSPACE}/molecule/default
           rsync -avzh --ignore-existing --ignore-errors \
-            git_molecule/scenarios/hetznercloud/ \
+            git_molecule/scenarios/kvm/ \
             ${GITHUB_WORKSPACE}/molecule/default/
 
       - name: Configure unit test variables
@@ -178,6 +194,14 @@ jobs:
           # tmate, openssh-client and xz-utils come with the runner image
           install-dependencies: false
 
+      - name: Install QEMU
+        # no-op once the runner image ships these packages
+        run: |
+          if ! command -v qemu-system-x86_64 >/dev/null; then
+            apt-get update -qq
+            apt-get install -y -qq --no-install-recommends qemu-system-x86 qemu-utils genisoimage
+          fi
+
       - name: Run Molecule unit tests
         # word splitting of MOLECULE_ARGS is intended (multiple molecule CLI arguments)
         run: molecule test $MOLECULE_ARGS
@@ -190,8 +214,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.CI_RUNNER_PAT_GITHUB }}
           MOLECULE_DEBUG: ${{ inputs.molecule_debug }}
           PY_COLORS: '1'
-          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
-          HETZNER_DNS_TOKEN: ${{ secrets.HETZNER_DNS_TOKEN }}
           ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
 
       - name: Cleanup workspace
@@ -202,16 +224,16 @@ jobs:
           shopt -s dotglob
           rm -rf *
 
-  molecule-unit-ubuntu:
+  molecule-unit-hetznercloud:
     runs-on: molecule
     container:
       image: ghcr.io/msqu-devops/molecule:runner@sha256:a5afe0d813f4c069aed85b411fabb02a8e08c0b606a424624998e2afc93abdf6
-    needs: [changes, lint, molecule-unit-debian]
-    if: (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && inputs.unit == 'true'
+    needs: [changes, lint]
+    if: (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && inputs.unit == 'true' && inputs.unit_driver == 'hetznercloud' && github.event_name != 'push'
     env:
       TEST_TYPE: unit
       HCLOUD_SERVER_STATE: stopped
-      MOLECULE_DISTRO: ${{ inputs.ubuntu_distro }}
+      MOLECULE_DISTRO: ${{ inputs.debian_distro }}
       MOLECULE_SCENARIO_NAME: hetznercloud
       INSTANCE_SIZE: ${{ inputs.instance_size }}
     steps:
@@ -309,8 +331,8 @@ jobs:
     runs-on: molecule
     container:
       image: ghcr.io/msqu-devops/molecule:runner@sha256:a5afe0d813f4c069aed85b411fabb02a8e08c0b606a424624998e2afc93abdf6
-    needs: [changes, lint, molecule-unit-debian, molecule-unit-ubuntu]
-    if: always() && (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && inputs.integration == 'true' && (needs.molecule-unit-debian.result == 'success' || inputs.unit != 'true')
+    needs: [changes, lint, molecule-unit-kvm, molecule-unit-hetznercloud]
+    if: always() && github.event_name != 'push' && (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && inputs.integration == 'true' && (inputs.unit != 'true' || needs.molecule-unit-kvm.result == 'success' || needs.molecule-unit-hetznercloud.result == 'success')
     env:
       TEST_TYPE: integration
       HCLOUD_SERVER_STATE: stopped
@@ -415,124 +437,12 @@ jobs:
           shopt -s dotglob
           rm -rf *
 
-  molecule-integration-ubuntu:
-    runs-on: molecule
-    container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:a5afe0d813f4c069aed85b411fabb02a8e08c0b606a424624998e2afc93abdf6
-    needs: [changes, lint, molecule-unit-ubuntu, molecule-integration-debian]
-    if: always() && (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && inputs.integration == 'true' && (needs.molecule-unit-ubuntu.result == 'success' || inputs.unit != 'true')
-    env:
-      TEST_TYPE: integration
-      HCLOUD_SERVER_STATE: absent
-      MOLECULE_DISTRO: ${{ inputs.ubuntu_distro }}
-      MOLECULE_SCENARIO_NAME: hetznercloud
-      INSTANCE_SIZE: ${{ inputs.instance_size }}
-    steps:
-      - name: Checkout repository
-        uses: https://github.com/actions/checkout@v7
-
-      - name: Set environment variables
-        run: |
-          {
-            echo "CI_HOSTNAME=$(echo '${{ env.MOLECULE_DISTRO }}' | tr -dc '[:alnum:]\n\r' | tr '[:upper:]' '[:lower:]')"
-            echo "CI_PROJECT_NAME_MOLECULE=$(echo ${GITHUB_REPOSITORY#*/} | tr '_' '-')"
-            echo "CI_PROJECT_DIR=$GITHUB_WORKSPACE"
-          } >> $GITHUB_ENV
-
-      - name: Configure SSH
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-        run: |
-          mkdir -p ~/.ssh/
-          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keygen -y -f ~/.ssh/id_ed25519 > ~/.ssh/id_ed25519.pub
-          echo "SSH Key Fingerprint: $(ssh-keygen -l -E md5 -f ~/.ssh/id_ed25519)"
-          ssh-keyscan -p 22222 git.msqu.de >> ~/.ssh/known_hosts 2>/dev/null || true
-          cat > ~/.ssh/config << EOF
-          Host *
-            StrictHostKeyChecking no
-            UserKnownHostsFile=/dev/null
-          EOF
-
-      - name: Checkout infra repository
-        uses: https://github.com/actions/checkout@v7
-        with:
-          github-server-url: https://git.msqu.de
-          repository: infrastructure/infra
-          token: '${{ secrets.CI_RUNNER_PAT }}'
-          path: git_infra
-          ref: main
-          sparse-checkout: |
-            group_vars/
-
-      - name: Checkout molecule scenarios
-        uses: https://github.com/actions/checkout@v7
-        with:
-          github-server-url: https://git.msqu.de
-          repository: cicd/molecule
-          token: '${{ secrets.CI_RUNNER_PAT }}'
-          path: git_molecule
-          ref: ${{ inputs.molecule_ref }}
-          sparse-checkout: |
-            scenarios/hetznercloud
-
-      - name: Prepare Ansible Vault
-        env:
-          ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
-        run: printf '%s\n' "$ANSIBLE_VAULT_PASSWORD" > "$GITHUB_WORKSPACE/.vault"
-
-      - name: Setup molecule scenario
-        run: |
-          mkdir -p ${GITHUB_WORKSPACE}/molecule/default
-          rsync -avzh --ignore-existing --ignore-errors \
-            git_molecule/scenarios/hetznercloud/ \
-            ${GITHUB_WORKSPACE}/molecule/default/
-
-      - name: Configure integration test variables
-        run: |
-          rsync -aP git_infra/group_vars ${GITHUB_WORKSPACE}/molecule/default/
-
-      - name: Setup debugging session
-        if: inputs.molecule_debug == 'true'
-        uses: https://github.com/mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113  # v3.24
-        with:
-          limit-access-to-actor: true
-          # tmate, openssh-client and xz-utils come with the runner image
-          install-dependencies: false
-
-      - name: Run Molecule integration tests
-        # word splitting of MOLECULE_ARGS is intended (multiple molecule CLI arguments)
-        run: molecule test $MOLECULE_ARGS
-        env:
-          MOLECULE_ARGS: ${{ inputs.args }}
-          ANSIBLE_FORCE_COLOR: '1'
-          ANSIBLE_VERBOSITY: '1'
-          CI_JOB_ID: ${{ github.run_id }}
-          GITEA_TOKEN: ${{ secrets.CI_RUNNER_PAT }}
-          GITHUB_TOKEN: ${{ secrets.CI_RUNNER_PAT_GITHUB }}
-          MOLECULE_DEBUG: ${{ inputs.molecule_debug }}
-          PY_COLORS: '1'
-          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
-          HETZNER_DNS_TOKEN: ${{ secrets.HETZNER_DNS_TOKEN }}
-          ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
-
-      - name: Cleanup workspace
-        if: always()
-        shell: bash
-        run: |
-          cd ${GITHUB_WORKSPACE}
-          shopt -s dotglob
-          rm -rf *
-
-  # Runs after all test jobs, also after failures and cancellations: deletes leftover servers
-  # (and, via the role's cleanup.yml, their DNS records) instead of leaving them stopped
   molecule-cleanup:
     runs-on: molecule
     container:
       image: ghcr.io/msqu-devops/molecule:runner@sha256:a5afe0d813f4c069aed85b411fabb02a8e08c0b606a424624998e2afc93abdf6
-    if: always() && (inputs.unit == 'true' || inputs.integration == 'true')
-    needs: [molecule-unit-debian, molecule-unit-ubuntu, molecule-integration-debian, molecule-integration-ubuntu]
+    if: always() && github.event_name != 'push' && (inputs.integration == 'true' || (inputs.unit == 'true' && inputs.unit_driver == 'hetznercloud'))
+    needs: [molecule-unit-hetznercloud, molecule-integration-debian]
     env:
       MOLECULE_SCENARIO_NAME: hetznercloud
       MOLECULE_DISTRO: ${{ inputs.debian_distro }}

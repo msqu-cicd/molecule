@@ -89,13 +89,14 @@
 
     - name: Define server type fallbacks and user_data
       ansible.builtin.set_fact:
-        # CX and CAX are Hetzner's Cost-Optimized tier, often sold out; CPX
-        # (regular performance) has the same sizes and is the next choice.
+        # CX (x86) and CAX (Arm) are Hetzner's Cost-Optimized tier, often sold out;
+        # CPX (regular performance, x86) has the same sizes. Roles must not depend on
+        # the CPU architecture, so each size tries x86 and Arm before the next size.
         server_type_fallbacks:
-          cx23: ['cx23', 'cpx22', 'cx33', 'cpx32', 'cx43']
-          cax11: ['cax11', 'cax21', 'cx23', 'cpx22']
-          cax21: ['cax21', 'cax31', 'cx33', 'cpx32']
-          cax31: ['cax31', 'cax41', 'cx43', 'cpx42']
+          cx23: ['cx23', 'cax11', 'cpx22', 'cx33', 'cax21', 'cpx32', 'cx43']
+          cax11: ['cax11', 'cx23', 'cpx22', 'cax21', 'cx33', 'cpx32']
+          cax21: ['cax21', 'cx33', 'cpx32', 'cax31', 'cx43', 'cpx42']
+          cax31: ['cax31', 'cx43', 'cpx42', 'cax41']
         server_user_data: |
           #cloud-config
           package_update: false

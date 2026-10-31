@@ -21,11 +21,12 @@ Optimized molecule scenario for Hetzner Cloud infrastructure testing with the fo
 ### Environment Variables
 - `HCLOUD_TOKEN`: Hetzner Cloud API token (required)
 - `HCLOUD_PRIVATE_NET`: Enable private networking (`true`/`false`, default: `false`)
-- `INSTANCE_SIZE`: Server type (default: `cx23`; falls back to `cpx22`, `cx33`, `cpx32`, `cx43` when unavailable)
+- `INSTANCE_SIZE`: Server type (default: `cx23`; falls back to `cax11`, `cpx22`, `cx33`, `cax21`, `cpx32`, `cx43` when
+  unavailable: x86 and Arm per size, roles must not depend on the CPU architecture)
 - `INSTANCE_REGION`: Preferred location (default: `hel1`); `fsn1` and `nbg1`, the other eu-central locations, are tried next
 - Server type and location candidates are filtered by Hetzner's per-location availability (`server_type_info`),
   and every pair is tried when that lookup fails. A server left by an earlier job keeps its type and location.
-- `MOLECULE_DISTRO`: OS image (required, CI uses `debian-13` and `ubuntu-26.04`)
+- `MOLECULE_DISTRO`: OS image (required, CI uses `debian-13`)
 
 ### Resource Management
 - All platforms in `molecule.yml` are created, so roles can define multi-node scenarios
@@ -117,8 +118,10 @@ string like `"false"` is truthy in expressions.
 | `molecule_debug` | `'false'` | Open a tmate session before the tests |
 | `args` | `''` | Extra `molecule test` arguments |
 | `unit` / `integration` | `'true'` | Switch the unit / integration jobs (both `'false'` = lint only) |
-| `debian_distro` / `ubuntu_distro` | `debian-13` / `ubuntu-26.04` | Hetzner images |
-| `instance_size` | scenario default | Server type |
+| `debian_distro` | `debian-13` | Image for both jobs (the kvm unit test takes `debian-12` or `debian-13`) |
+| `unit_driver` | `kvm` | `kvm`: unit test as a QEMU guest on the `kvm` runner; `hetznercloud`: on Hetzner, for multi-node scenarios whose servers must reach each other (k3s, rke2) |
+| `kvm_memory` / `kvm_vcpus` | `'2048'` / `'2'` | Guest size of the kvm unit test |
+| `instance_size` | scenario default | Hetzner server type of the integration test |
 | `extra_files_ignore` | `''` | Additional changed-files ignore patterns |
 | `molecule_ref` | `main` | Ref of this repo to take the scenario from |
 
@@ -132,9 +135,8 @@ chains run in parallel and it takes `MOLECULE_AWS_ACCESS_KEY_ID`/`MOLECULE_AWS_S
 
 ### role-kvm.yml
 
-Same inputs and secrets as `role-hetznercloud.yml`, except `instance_size`, which becomes `kvm_memory`
-(default `'2048'`) and `kvm_vcpus` (`'2'`); `debian_distro`/`ubuntu_distro` name cloud images
-(`debian-12`/`debian-13`, `ubuntu-24.04`/`ubuntu-26.04`). The test jobs run on the `kvm` runner, lint stays on
+Same inputs and secrets as `role-hetznercloud.yml`, except `instance_size` and `unit_driver`;
+`debian_distro` names the cloud image (`debian-12`/`debian-13`). Unit and integration both run on the `kvm` runner, lint stays on
 `molecule`, and there is no cleanup job because the guests die with the job container. `HCLOUD_TOKEN` and
 `HETZNER_DNS_TOKEN` are accepted but unused, so a caller switches by changing only its `uses:` line.
 
@@ -142,10 +144,15 @@ Same inputs and secrets as `role-hetznercloud.yml`, except `instance_size`, whic
 
 1. **changes**: skip the tests when only ignored files changed (deletions count as changes)
 2. **lint**: ansible-lint and yamllint
-3. **unit** (Debian, then Ubuntu): role with `tests/vars.yml`; servers are stopped between jobs and rebuilt
-4. **integration** (Debian, then Ubuntu): role with the infra `group_vars`; the last job deletes the servers
+3. **unit** (Debian 13): role with `tests/vars.yml`, as a QEMU guest on the `kvm` runner (`unit_driver: kvm`,
+   the default) or on Hetzner (`unit_driver: hetznercloud`, multi-node scenarios)
+4. **integration** (Debian 13, Hetzner): role with the infra `group_vars`
 5. **cleanup** (always, also after failures/cancellations): deletes leftover servers and DNS records,
    then a safety net deletes CI servers of any repo older than 3 hours
+
+The fleet runs Debian 13 only, so there are no Ubuntu jobs. Pushes to the default branch (merges, already
+tested in their pull request) run lint and the kvm unit test only; the Hetzner jobs run on pull requests and
+manual dispatches.
 
 Runs of one repo share the concurrency group `molecule-tests`, because the server and DNS names are
 `molecule-<repo>`. A new run waits for the running one instead of cancelling it (`cancel-in-progress: false`).
