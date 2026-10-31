@@ -166,6 +166,11 @@ MOLECULE_DISTRO=debian-13 KVM_IMAGE_CACHE=~/.cache/molecule-images molecule test
 ```
 
 `examples/Makefile` copies a scenario into a role and runs molecule with the same environment as CI.
+It is the copy every role repository carries. `make converge` keeps the instance and its molecule
+state in `/tmp/molecule-cache-<repo>` for `make verify`, `make login` and `make destroy`; `make test`
+and `make destroy` remove the state and the generated scenario files, also when molecule fails.
+`clean-molecule` never deletes files tracked in git or `converge_override.yml`. The hcloud token is read
+from `~/.secrets/hcloud` (or `HCLOUD_TOKEN`) by the molecule targets only.
 
 # Configuration
 ## Include prerequisite role
