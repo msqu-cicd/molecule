@@ -275,6 +275,8 @@ def main():
                 os.symlink(os.path.join(infra_dir, sub), os.path.join(tmp, sub))
         env = dict(os.environ, ANSIBLE_ROLES_PATH=os.path.join(tmp, "roles"), ANSIBLE_STDOUT_CALLBACK="default",
                    ANSIBLE_CALLBACK_RESULT_FORMAT="json", ANSIBLE_NOCOLOR="1", ANSIBLE_LOCAL_TEMP=os.path.join(tmp, "tmp"))
+        # Job containers have no USER; defaults such as lookup('env', 'USER') would come out empty
+        env.setdefault("USER", "infra-spec")
         for playbook in sorted({e[0] for e in entries}):
             if playbook.startswith("workstation"):
                 invs, limit = WORKSTATION_INVENTORIES, []
