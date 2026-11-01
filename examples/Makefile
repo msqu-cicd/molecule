@@ -10,7 +10,7 @@ MOLECULE_LINT_IMAGE := ghcr.io/msqu-devops/molecule:lint
 
 # Molecule settings
 MOLECULE_GIT_REPO := ssh://git@git.msqu.de:22222/CICD/molecule.git
-DRIVER ?= hetznercloud
+DRIVER ?= kvm
 MOLECULE_DISTRO ?= debian-13
 
 # Authentication: the hcloud token is read inside the molecule recipes only,
@@ -28,6 +28,9 @@ CI_PROJECT_NAME_MOLECULE := $(shell echo $(CI_PROJECT_NAME) | tr '_' '-')
 # Molecule state (instance SSH access included), kept from converge until test or
 # destroy cleans up, so that verify and login find the instance. Owner-only, per user.
 MOLECULE_CACHE_DIR := $(HOME)/.cache/molecule-make/$(CI_PROJECT_NAME_MOLECULE)
+# The scenario files .prepare copied into molecule/default (one path per line); clean-molecule
+# deletes exactly these, never the role's own files
+MOLECULE_COPIED_FILES := $(MOLECULE_CACHE_DIR)/copied-files
 
 # ============================================================================
 # Exported Environment Variables
@@ -52,13 +55,16 @@ export MOLECULE_EPHEMERAL_DIRECTORY := $(MOLECULE_CACHE_DIR)/.cache/
 	@install -d -m 0700 $(MOLECULE_CACHE_DIR)
 	@tmp=$$(mktemp -d /tmp/molecule-git.XXXXXXXX) && trap 'rm -rf "$$tmp"' EXIT && \
 		git clone --depth 1 --quiet $(MOLECULE_GIT_REPO) "$$tmp/molecule" && \
+		(cd "$$tmp/molecule/scenarios/$(DRIVER)" && find . -type f) | while IFS= read -r f; do \
+			[ -e "$(CI_PROJECT_DIR)/molecule/default/$$f" ] || echo "$${f#./}"; \
+		done >> "$(MOLECULE_COPIED_FILES)" && \
 		rsync -azh --ignore-existing "$$tmp/molecule/scenarios/$(DRIVER)/" $(CI_PROJECT_DIR)/molecule/default/
 
 .PHONY: .cleanup
 .cleanup:
 	@echo "Cleaning up the molecule state..."
-	@rm -rf $(MOLECULE_CACHE_DIR)
 	@$(MAKE) --no-print-directory clean-molecule
+	@rm -rf $(MOLECULE_CACHE_DIR)
 
 # ============================================================================
 # Molecule Test Targets
@@ -132,9 +138,14 @@ clean: ## Clean generated and temporary files
 	@find . -type f -name "*.pyc" -delete 2>/dev/null || true
 
 .PHONY: clean-molecule
-clean-molecule: ## Remove the generated molecule scenario files (keeps tracked files and converge_override.yml)
+clean-molecule: ## Remove the scenario files .prepare copied in (keeps the role's own and tracked files)
 	@echo "Removing generated molecule files..."
-	@git ls-files -z --others molecule/default 2>/dev/null | grep -z -v '/converge_override\.yml$$' | xargs -0 -r rm -f
+	@if [ -f "$(MOLECULE_COPIED_FILES)" ]; then \
+		sort -u "$(MOLECULE_COPIED_FILES)" | while IFS= read -r f; do \
+			git ls-files --error-unmatch -- "molecule/default/$$f" >/dev/null 2>&1 || rm -f -- "molecule/default/$$f"; \
+		done; \
+		rm -f "$(MOLECULE_COPIED_FILES)"; \
+	fi
 	@echo "Molecule scenario files removed. Run 'make converge' to regenerate."
 
 .PHONY: print-%
@@ -166,8 +177,8 @@ help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
 	@echo ""
 	@echo "Examples:"
-	@echo "  make converge MOLECULE_DISTRO=ubuntu-26.04"
-	@echo "  make test DRIVER=kvm"
+	@echo "  make converge MOLECULE_DISTRO=debian-13"
+	@echo "  make test DRIVER=hetznercloud"
 	@echo "  make print-CI_PROJECT_NAME"
 
 .DEFAULT_GOAL := help

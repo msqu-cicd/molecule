@@ -32,7 +32,9 @@ Optimized molecule scenario for Hetzner Cloud infrastructure testing with the fo
 - All platforms in `molecule.yml` are created, so roles can define multi-node scenarios
 - Servers are stopped between CI jobs and rebuilt by the next job; the last job deletes them
 - Automatic cleanup of all resources after testing
-- Labels applied: `environment: molecule`, `project: <project-name>`, `managed-by: molecule`
+- Labels applied: `environment: molecule`, `project: <project-name>`, `managed-by: molecule`; the cleanup
+  job's safety net selects old servers by `managed-by=molecule`, so a role's own `molecule.yml` must keep that label
+- root logs in with the registered SSH keys; the cloud-init user data sets no root password and does not enable SSH password login
 
 ## KVM (local QEMU)
 
@@ -48,7 +50,7 @@ TCG (works, but slow) without it.
 - `KVM_MEMORY` (default `2048` MiB), `KVM_VCPUS` (`2`), `KVM_DISK` (`10G`), `KVM_SSH_PORT` (`2222`; platform
   N of a multi-node scenario uses `KVM_SSH_PORT + N`)
 - `KVM_IMAGE_CACHE`: base image directory (default `/var/cache/molecule-images`, bind-mounted from the runner
-  host by `role-kvm.yml`); a path that cannot be created falls back to molecule's ephemeral directory
+  host by `role-kvm.yml`); a path that cannot be created or written falls back to molecule's ephemeral directory
 - `KVM_WORK_DIR`: overlays, seeds, pid files and serial logs (default: molecule's ephemeral directory; CI
   uses the runner's `/tmp` tmpfs)
 
@@ -158,7 +160,7 @@ becomes `kvm_memory` (default `'2048'`) and `kvm_vcpus` (`'2'`); `debian_distro`
 3. **unit** (Debian 13): role with `tests/vars.yml`
 4. **integration** (Debian 13): role with the infra `group_vars`
 5. **cleanup** (hetznercloud only; always, also after failures/cancellations): deletes leftover servers and
-   DNS records, then a safety net deletes CI servers of any repo older than 3 hours
+   DNS records, then a safety net deletes servers labelled `managed-by=molecule` of any repo older than 3 hours
 
 The fleet runs Debian 13 only, so there are no Ubuntu jobs. Pushes to the default branch (merges, already
 tested in their pull request) skip the integration test: `role-kvm.yml` runs lint and the unit test,
@@ -175,7 +177,7 @@ Runs of one repo share the concurrency group `molecule-tests`, because the serve
 
 ## Testing changes to this repository
 
-- `ci.yml` lints the scenarios and workflows on every push and pull request.
+- `ci.yml` lints the scenarios, the examples and the workflows on every push and pull request.
 - `smoke-test.yml` runs the full Ansible/apt pipeline against the scenarios of the pushed ref
   (`molecule_ref`) whenever `scenarios/**` changes, and fails if apt fails.
 - The runner image is pinned by digest in the workflows; Renovate updates it.
@@ -189,12 +191,13 @@ INSTANCE_SIZE=cx33 molecule test           # different server type
 MOLECULE_DISTRO=debian-13 KVM_IMAGE_CACHE=~/.cache/molecule-images molecule test   # kvm scenario, needs /dev/kvm
 ```
 
-`examples/Makefile` copies a scenario into a role and runs molecule with the same environment as CI.
-It is the copy every role repository carries. `make converge` keeps the instance and its molecule
+`examples/Makefile` copies a scenario (`DRIVER`, default `kvm`) into a role and runs molecule with the same
+environment as CI. It is the copy every role repository carries. `make converge` keeps the instance and its molecule
 state in `~/.cache/molecule-make/<repo>` (mode 0700) for `make verify`, `make login` and `make destroy`; `make test`
-and `make destroy` remove the state and the generated scenario files, also when molecule fails.
-`clean-molecule` never deletes files tracked in git or `converge_override.yml`. The hcloud token is read
-from `~/.secrets/hcloud` (or `HCLOUD_TOKEN`) by the molecule targets only.
+and `make destroy` remove the state and the scenario files the Makefile copied in, also when molecule fails.
+Only files that did not exist before the copy are removed (the cache directory lists them), and never files
+tracked in git, so a role's own `verify.yml`, `prepare.yml`, `requirements.yml` or `converge_override.yml` stays,
+committed or not. The hcloud token is read from `~/.secrets/hcloud` (or `HCLOUD_TOKEN`) by the molecule targets only.
 
 # Configuration
 ## Include prerequisite role

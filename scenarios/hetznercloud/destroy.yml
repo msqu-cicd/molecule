@@ -45,7 +45,7 @@
             name: "{{ item.name }}"
             api_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
             state: absent
-          register: server
+          register: server_destroy
           with_items: "{{ molecule_yml.platforms }}"
           async: 7200
           poll: 0
@@ -56,7 +56,7 @@
           register: hetzner_jobs
           until: hetzner_jobs.finished
           retries: 300
-          with_items: "{{ server.results }}"
+          with_items: "{{ server_destroy.results }}"
 
         - name: Destroy volume(s)
           hetzner.hcloud.volume:
@@ -101,7 +101,7 @@
             name: "{{ item.name }}"
             api_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
             state: "{{ hetzner_server_state }}"
-          register: server
+          register: server_stop
           with_items: "{{ molecule_yml.platforms }}"
           async: 7200
           poll: 0
@@ -112,7 +112,7 @@
           register: hetzner_jobs
           until: hetzner_jobs.finished
           retries: 300
-          with_items: "{{ server.results }}"
+          with_items: "{{ server_stop.results }}"
 
     - name: Remove registered SSH key
       hetzner.hcloud.ssh_key:
@@ -136,4 +136,5 @@
           {{ instance_conf | to_json | from_json | to_yaml }}
         dest: "{{ molecule_instance_config }}"
         mode: "0600"
-      when: server.changed | bool
+      # separate registers: a skipped task would overwrite the result of the other one
+      when: server_destroy is changed or server_stop is changed

@@ -26,8 +26,8 @@
     # only accepts the cloud-init user from create.yml as SSH login
     - name: Set facts
       ansible.builtin.set_fact:
-        interface_main_ipv4: "{{ ansible_facts['default_ipv4'].address }}"
-        interface_main_ipv6: "{{ ansible_facts['default_ipv6'].address }}"
+        interface_main_ipv4: "{{ ansible_facts['default_ipv4'].address | default('') }}"
+        interface_main_ipv6: "{{ ansible_facts['default_ipv6'].address | default('') }}"
         ipv6_enabled: "{{ ansible_facts['all_ipv6_addresses'] | default([]) | length > 0 }}"
 
     # EC2 images (Debian, Ubuntu) are provisioned by cloud-init

@@ -35,6 +35,10 @@ jobs:
           resp=$(curl -fsS -X POST -H "Authorization: token $TOKEN" -H 'Content-Type: application/json' \
             "$api/workflows/molecule.yml/dispatches?return_run_details=true" -d "$body")
           id=$(echo "$resp" | jq -r .workflow_run_id)
+          if [ -z "$id" ] || [ "$id" = null ]; then
+            echo "The dispatch response has no workflow_run_id, nothing to wait for" >&2
+            exit 1
+          fi
           echo "Started $(echo "$resp" | jq -r .html_url) with molecule_ref=$MOLECULE_REF"
           while :; do
             run=$(curl -fsS -H "Authorization: token $TOKEN" "$api/runs/$id")

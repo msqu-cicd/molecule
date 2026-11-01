@@ -16,4 +16,4 @@ ignore: |
   .drone.yml
   .github/
   .gitlab-ci.yml
-  molecule/
+  /molecule/

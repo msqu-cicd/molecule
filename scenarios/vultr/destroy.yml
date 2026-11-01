@@ -38,7 +38,7 @@
             region: "{{ item.region }}"
             api_key: "{{ lookup('env', 'VULTR_API_KEY') }}"
             state: absent
-          register: server
+          register: server_destroy
           with_items: "{{ molecule_yml.platforms }}"
 
         - name: Delete private network(s)
@@ -62,7 +62,7 @@
             region: "{{ item.region }}"
             api_key: "{{ lookup('env', 'VULTR_API_KEY') }}"
             state: "{{ vultr_server_state }}"
-          register: server
+          register: server_stop
           with_items: "{{ molecule_yml.platforms }}"
       when:
         - vultr_server_state != 'absent'
@@ -92,4 +92,5 @@
           {{ instance_conf | to_json | from_json | to_yaml }}
         dest: "{{ molecule_instance_config }}"
         mode: "0600"
-      when: server.changed | bool
+      # separate registers: a skipped task would overwrite the result of the other one
+      when: server_destroy is changed or server_stop is changed

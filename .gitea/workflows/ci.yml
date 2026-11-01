@@ -31,5 +31,9 @@ jobs:
       - name: Ansible Lint scenarios
         run: ansible-lint --offline scenarios/
 
+      # the files every role copies, with their own config
+      - name: Ansible Lint examples
+        run: ansible-lint --offline -c examples/.ansible-lint examples/
+
       - name: Yaml Lint
-        run: yamllint -f colored scenarios .gitea
+        run: yamllint -f colored scenarios .gitea examples
