@@ -10,7 +10,6 @@ platforms:
     region: ${INSTANCE_REGION:-fra}
     groups:
       - master
-    vpc_cidr: ${INSTANCE_VPC_CIDR:-"172.16.0.0/24"}
 provisioner:
   name: ansible
   env:

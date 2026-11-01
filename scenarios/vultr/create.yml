@@ -78,17 +78,6 @@
           - "{{ vultr_server_state }}"
           - "{{ final_ssh_key_name }}"
 
-    - name: Create private network(s)
-      vultr.cloud.vpc:
-        name: "{{ item.name }}"
-        v4_subnet: "{{ item.vpc_cidr | ansible.utils.ipaddr('network') }}"
-        v4_subnet_mask: "{{ item.vpc_cidr | ansible.utils.ipaddr('prefix') }}"
-        region: "{{ item.region }}"
-        api_key: "{{ lookup('env', 'VULTR_API_KEY') }}"
-        state: present
-      with_items: "{{ molecule_yml.platforms }}"
-      register: networks
-
     - name: Create molecule instance(s)
       vultr.cloud.instance:
         label: "{{ item.name }}"

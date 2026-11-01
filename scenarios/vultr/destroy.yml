@@ -21,15 +21,6 @@
         skip_instances: true
       when: not instance_config_lookup.ansible_facts.instance_conf
 
-    - name: Gather Vultr servers information
-      vultr.cloud.instance_info:
-        region: "{{ item.region }}"
-        api_key: "{{ lookup('env', 'VULTR_API_KEY') }}"
-      with_items: "{{ molecule_yml.platforms }}"
-      register: vultr_server_info_output
-      when:
-        - not instance_config_lookup.ansible_facts.instance_conf
-
     - name: Destroy Vultr Server
       block:
         - name: Destroy molecule instance(s)
@@ -40,35 +31,36 @@
             state: absent
           register: server_destroy
           with_items: "{{ molecule_yml.platforms }}"
-
-        - name: Delete private network(s)
-          vultr.cloud.vpc:
-            name: "{{ item.name }}"
-            region: "{{ item.region }}"
-            api_key: "{{ lookup('env', 'VULTR_API_KEY') }}"
-            state: absent
-          with_items: "{{ molecule_yml.platforms }}"
-          register: networks
-          until: "networks is not failed"
-          retries: 3
-          delay: 30
       when: vultr_server_state == 'absent'
 
+    # present is no power state: running servers stay as they are (the module would need a plan)
     - name: Stop Vultr Server
+      when:
+        - vultr_server_state != 'absent'
+        - vultr_server_state != 'present'
       block:
-        - name: "Trigger molecule instance(s) desired state {{ vultr_server_state }}"
-          vultr.cloud.instance:
+        - name: Gather Vultr servers information
+          vultr.cloud.instance_info:
             label: "{{ item.name }}"
             region: "{{ item.region }}"
             api_key: "{{ lookup('env', 'VULTR_API_KEY') }}"
+          loop: "{{ molecule_yml.platforms }}"
+          loop_control:
+            label: "{{ item.name }}"
+          register: vultr_server_info_output
+
+        - name: "Trigger molecule instance(s) desired state {{ vultr_server_state }}"
+          vultr.cloud.instance:
+            label: "{{ item.item.name }}"
+            region: "{{ item.item.region }}"
+            api_key: "{{ lookup('env', 'VULTR_API_KEY') }}"
             state: "{{ vultr_server_state }}"
           register: server_stop
-          with_items: "{{ molecule_yml.platforms }}"
-      when:
-        - vultr_server_state != 'absent'
-        - vultr_server_info_output is defined
-        - vultr_server_info_output.vultr_server_info is defined
-        - vultr_server_info_output.vultr_server_info[0].id is defined
+          loop: "{{ vultr_server_info_output.results }}"
+          loop_control:
+            label: "{{ item.item.name }}"
+          # existing servers only: the module would try to create a missing one
+          when: item.vultr_instance_info | selectattr('label', 'equalto', item.item.name) | list | length > 0
 
     - name: Remove registered SSH key
       vultr.cloud.ssh_key:
