@@ -14,6 +14,11 @@ infra's pre_tasks the play provides ansible_facts['packages'], here as an empty 
 module: the runner's real packages say nothing about the hosts, and package_facts needs the package
 manager's Python bindings, which the CI image's interpreter lacks.
 
+A play's literal hosts: pattern limits the hosts; a templated one ("{{ target }}") means all, the
+infra Makefile's default target. Not modelled: vars: that a play, a roles: entry or include_role
+passes to the role (infra passes none to its roles today) and the role's meta/main.yml dependencies
+(none of the roles has any; import_role would need them on the roles path).
+
 Failures print the host, the task and the assertion or type error, never variable values (the
 inventories hold secrets). Exit 1 on any failure, 0 otherwise, also when no playbook applies the
 role.
@@ -59,8 +64,9 @@ _TagLoader.add_multi_constructor("!", lambda loader, suffix, node: loader.constr
 
 
 def load_yaml(path):
+    """YAML with !vault and other custom tags read as plain strings (playbooks and vars files)."""
     with open(path, encoding="utf-8") as fh:
-        return yaml.safe_load(fh)
+        return yaml.load(fh, Loader=_TagLoader)
 
 
 def fact_derived_vars(infra_dir):
@@ -120,6 +126,14 @@ def runtime_names(infra_dir, tasks, depth=0):
     return names
 
 
+def same_role(ref, name):
+    """A role reference (plain name, FQCN, path, hyphenated) that names the role under test."""
+    if not isinstance(ref, str) or "{{" in ref:
+        return False
+    last = re.split(r"[./]", ref.rstrip("/"))[-1]
+    return name in {ref, last, ref.replace("-", "_"), last.replace("-", "_")}
+
+
 def walk_tasks(tasks, inherited=()):
     """Every task with the when clauses of its enclosing blocks plus its own."""
     for task in tasks or []:
@@ -149,24 +163,25 @@ def entry_conditions(infra_dir, name):
         for play in plays:
             if not isinstance(play, dict) or "hosts" not in play:
                 continue
-            runtime = runtime_names(infra_dir, play.get("pre_tasks")) | derived
+            runtime = derived.union(*(runtime_names(infra_dir, play.get(sec)) for sec in ("pre_tasks", "tasks", "post_tasks")))
+            hosts = play["hosts"] if isinstance(play["hosts"], str) and "{{" not in play["hosts"] else "all"
             for item in play.get("roles") or []:
-                rname = item.get("role") or item.get("name") if isinstance(item, dict) else item
-                if rname == name:
-                    entries.append((fname, as_list(item.get("when") if isinstance(item, dict) else None), runtime))
+                rname = (item.get("role") or item.get("name")) if isinstance(item, dict) else item
+                if same_role(rname, name):
+                    entries.append((fname, as_list(item.get("when") if isinstance(item, dict) else None), runtime, hosts))
             for section in ("pre_tasks", "tasks", "post_tasks"):
                 for task, when in walk_tasks(play.get(section)):
                     for key in ("ansible.builtin.include_role", "ansible.builtin.import_role", "include_role", "import_role"):
                         args = task.get(key)
-                        if isinstance(args, dict) and args.get("name") == name:
-                            entries.append((fname, when, runtime))
+                        if isinstance(args, dict) and same_role(args.get("name"), name):
+                            entries.append((fname, when, runtime, hosts))
     return entries
 
 
 def condition(entries):
     """Jinja test for 'some entry applies the role', fact and runtime clauses dropped."""
     parts = []
-    for _, clauses, runtime in entries:
+    for _, clauses, runtime, _hosts in entries:
         def runtime_only(clause):
             return any(re.search(rf"\b{re.escape(n)}\b", str(clause)) for n in runtime)
         kept = [f"({c})" for c in clauses if not FACT_CLAUSE.search(str(c)) and not runtime_only(c)]
@@ -176,7 +191,7 @@ def condition(entries):
     return " or ".join(f"({p})" for p in parts)
 
 
-def play_text(name, role_dir, cond):
+def play_text(name, role_dir, cond, hosts="all"):
     spec = os.path.join(role_dir, "meta", "argument_specs.yml")
     has_assert = os.path.isfile(os.path.join(role_dir, "tasks", "assert.yml"))
     tasks = [{
@@ -193,7 +208,7 @@ def play_text(name, role_dir, cond):
             "when": [cond],
         })
     pre = [{"name": "Provide empty package facts (infra's pre_tasks gather the real ones)", "infra_spec_packages": {}}]
-    return yaml.safe_dump([{"name": f"Infra spec check: {name}", "hosts": "all", "connection": "local",
+    return yaml.safe_dump([{"name": f"Infra spec check: {name}", "hosts": hosts, "connection": "local",
                             "gather_facts": True, "pre_tasks": pre, "tasks": tasks}], sort_keys=False)
 
 
@@ -205,11 +220,13 @@ def failures(output):
         if m:
             task = m.group(1)
             continue
-        m = re.match(r"fatal: \[([^\]]+)\]: FAILED! => (\{.*\})\s*$", line)
+        # "failed: [host] (item=...)" for loops; the item text can hold values and is dropped
+        m = re.match(r"(?:fatal: \[([^\]]+)\]: FAILED!|failed: \[([^\]]+)\] \(item=.*?\)) => (\{.*\})\s*$", line)
         if not m:
             continue
+        host = m.group(1) or m.group(2)
         try:
-            res = json.loads(m.group(2))
+            res = json.loads(m.group(3))
         except ValueError:
             res = {}
         if res.get("assertion"):
@@ -223,7 +240,7 @@ def failures(output):
             if not re.search(r"is undefined|has no attribute|Validation of arguments failed", msg):
                 msg = QUOTED.sub("'***'", msg)
             reason = msg[:400]
-        found.append((m.group(1), task, reason))
+        found.append((host, task, reason))
     return found
 
 
@@ -250,17 +267,20 @@ def main():
                 os.symlink(os.path.join(infra_dir, sub), os.path.join(tmp, sub))
         env = dict(os.environ, ANSIBLE_ROLES_PATH=os.path.join(tmp, "roles"), ANSIBLE_STDOUT_CALLBACK="default",
                    ANSIBLE_CALLBACK_RESULT_FORMAT="json", ANSIBLE_NOCOLOR="1", ANSIBLE_LOCAL_TEMP=os.path.join(tmp, "tmp"))
-        for playbook in sorted({f for f, _, _ in entries}):
-            cond = condition([e for e in entries if e[0] == playbook])
+        for playbook in sorted({e[0] for e in entries}):
+            mine = [e for e in entries if e[0] == playbook]
+            cond = condition(mine)
+            patterns = sorted({e[3] for e in mine})
+            hosts = "all" if "all" in patterns else ":".join(patterns)
             if playbook.startswith("workstation"):
                 invs, limit = WORKSTATION_INVENTORIES, []
             elif playbook in PLAYBOOK_INVENTORIES:
                 invs, limit = PLAYBOOK_INVENTORIES[playbook], []
             else:
                 invs, limit = [i for i in inventories if i not in SERVER_EXCLUDE], ["--limit", "!localhost"]
-            print(f"{name}: applied by {playbook} on {', '.join(invs)}; host condition: {cond}")
+            print(f"{name}: applied by {playbook} on {', '.join(invs)}; hosts: {hosts}; host condition: {cond}")
             with open(os.path.join(tmp, "play.yml"), "w", encoding="utf-8") as fh:
-                fh.write(play_text(name, role_dir, cond))
+                fh.write(play_text(name, role_dir, cond, hosts))
             for inv in invs:
                 if inv not in inventories:
                     continue
