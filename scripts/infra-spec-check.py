@@ -9,9 +9,10 @@ playbook runs against the inventories the infra Makefile uses for it (PLAYBOOK_I
 every host there where the condition holds runs the role's tasks/assert.yml and validates
 meta/argument_specs.yml (entry point main) with the host's real variables, over a local connection;
 nothing touches the hosts. Clauses that test facts, variables the play's pre_tasks set at runtime
-(set_fact, register) or group_vars computed from facts count as true: CI knows none of them. The
-play gathers package facts first, like infra's pre_tasks; values computed from them then follow the
-runner's packages, which is fine for type and shape checks.
+(set_fact, register) or group_vars computed from facts count as true: CI knows none of them. Like
+infra's pre_tasks the play provides ansible_facts['packages'], here as an empty dict from a stub
+module: the runner's real packages say nothing about the hosts, and package_facts needs the package
+manager's Python bindings, which the CI image's interpreter lacks.
 
 Failures print the host, the task and the assertion or type error, never variable values (the
 inventories hold secrets). Exit 1 on any failure, 0 otherwise, also when no playbook applies the
@@ -34,6 +35,19 @@ PLAYBOOK_INVENTORIES = {"github.yml": ["localhost.yml"]}
 SERVER_EXCLUDE = {"workstations.yml", "localhost.yml"}
 
 FACT_CLAUSE = re.compile(r"ansible_facts|\bansible_(distribution|os_family|virtualization|architecture|pkg_mgr|system|kernel|lsb)")
+# Module next to the generated play: sets ansible_facts['packages'] to an empty dict
+PACKAGES_MODULE = """#!/usr/bin/python
+from ansible.module_utils.basic import AnsibleModule
+
+
+def main():
+    module = AnsibleModule(argument_spec={}, supports_check_mode=True)
+    module.exit_json(changed=False, ansible_facts={"packages": {}})
+
+
+if __name__ == "__main__":
+    main()
+"""
 QUOTED = re.compile(r"'[^']*'|\"[^\"]*\"")
 
 
@@ -178,7 +192,7 @@ def play_text(name, role_dir, cond):
             },
             "when": [cond],
         })
-    pre = [{"name": "Gather package facts like infra's pre_tasks", "ansible.builtin.package_facts": {}}]
+    pre = [{"name": "Provide empty package facts (infra's pre_tasks gather the real ones)", "infra_spec_packages": {}}]
     return yaml.safe_dump([{"name": f"Infra spec check: {name}", "hosts": "all", "connection": "local",
                             "gather_facts": True, "pre_tasks": pre, "tasks": tasks}], sort_keys=False)
 
@@ -227,6 +241,9 @@ def main():
     inventories = sorted(i for i in os.listdir(inv_dir) if i.endswith((".yml", ".yaml", ".ini")))
     with tempfile.TemporaryDirectory(prefix="infra-spec-") as tmp:
         os.makedirs(os.path.join(tmp, "roles"))
+        os.makedirs(os.path.join(tmp, "library"))
+        with open(os.path.join(tmp, "library", "infra_spec_packages.py"), "w", encoding="utf-8") as fh:
+            fh.write(PACKAGES_MODULE)
         os.symlink(role_dir, os.path.join(tmp, "roles", name))
         for sub in ("group_vars", "host_vars"):
             if os.path.isdir(os.path.join(infra_dir, sub)):
