@@ -1,24 +1,9 @@
 ---
-- name: Converge
-  hosts: all
-  become: true
-
-  pre_tasks:
-    - name: update APT Cache
-      ansible.builtin.apt:
-        update_cache: yes
-        cache_valid_time: 600
-      register: result
-      until: result is succeeded
-      when: ansible_facts['os_family'] == 'Debian'
-
-    - name: Deploy SSH-Keys to remote host
-      ansible.posix.authorized_key:
-        user: root
-        state: present
-        key: https://github.com/eifelmicha.keys
-
-  tasks:
-    - name: "{{ lookup('env', 'MOLECULE_PROJECT_DIRECTORY') | basename }}"
-      include_role:
-        name: "{{ lookup('env', 'MOLECULE_PROJECT_DIRECTORY') | basename }}"
+# Optional molecule/default/converge_override.yml of a role: the scenario's converge.yml includes it
+# with include_tasks after its own pre_tasks (apt cache, facts) and before the role, so it is a flat
+# task list, not a playbook. Example: a prerequisite role (from requirements.yml), skipped in the
+# idempotence run.
+- name: Include the example prerequisite role
+  ansible.builtin.include_role:
+    name: example
+  when: "'molecule-idempotence-notest' not in ansible_skip_tags"

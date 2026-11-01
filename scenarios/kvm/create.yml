@@ -69,6 +69,19 @@
             path: "{{ kvm_image_cache }}"
             state: directory
             mode: "0755"
+
+        # an existing read-only directory passes the task above
+        - name: Check that the image cache directory is writable
+          ansible.builtin.stat:
+            path: "{{ kvm_image_cache }}"
+          register: kvm_image_cache_stat
+
+        - name: Fall back when the image cache directory is not writable
+          ansible.builtin.assert:
+            that:
+              - kvm_image_cache_stat.stat.writeable
+            fail_msg: "{{ kvm_image_cache }} is not writable"
+            quiet: true
       rescue:
         - name: Fall back to an image directory next to the work directory
           ansible.builtin.set_fact:

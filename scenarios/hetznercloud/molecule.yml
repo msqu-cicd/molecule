@@ -12,7 +12,7 @@ platforms:
       - master
     labels:
       environment: molecule
-      project: ${CI_PROJECT_NAME:-molecule}
+      project: ${CI_PROJECT_NAME_MOLECULE:-molecule}
       managed-by: molecule
     network:
       - name: ${CI_PROJECT_NAME_MOLECULE:-molecule}

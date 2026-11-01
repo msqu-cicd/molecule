@@ -322,7 +322,7 @@ jobs:
         # base image cache on the runner host (any host path is allowed by the runner config)
         - /var/cache/molecule-images:/var/cache/molecule-images
     needs: [changes, lint, molecule-unit-debian]
-    if: always() && github.event_name != 'push' && (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && inputs.integration == 'true' && (needs.molecule-unit-debian.result == 'success' || inputs.unit != 'true')
+    if: always() && github.event_name != 'push' && (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && inputs.integration == 'true' && needs.lint.result == 'success' && (needs.molecule-unit-debian.result == 'success' || inputs.unit != 'true')
     env:
       TEST_TYPE: integration
       MOLECULE_DISTRO: ${{ inputs.debian_distro }}

@@ -395,7 +395,7 @@ jobs:
     container:
       image: ghcr.io/msqu-devops/molecule:runner@sha256:a5afe0d813f4c069aed85b411fabb02a8e08c0b606a424624998e2afc93abdf6
     needs: [changes, lint, molecule-unit-debian]
-    if: always() && (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && inputs.integration == 'true' && (needs.molecule-unit-debian.result == 'success' || inputs.unit != 'true')
+    if: always() && (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && inputs.integration == 'true' && needs.lint.result == 'success' && (needs.molecule-unit-debian.result == 'success' || inputs.unit != 'true')
     env:
       TEST_TYPE: integration
       AWS_DEFAULT_REGION: ${{ inputs.region }}
@@ -528,7 +528,7 @@ jobs:
     container:
       image: ghcr.io/msqu-devops/molecule:runner@sha256:a5afe0d813f4c069aed85b411fabb02a8e08c0b606a424624998e2afc93abdf6
     needs: [changes, lint, molecule-unit-ubuntu]
-    if: always() && (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && inputs.integration == 'true' && (needs.molecule-unit-ubuntu.result == 'success' || inputs.unit != 'true')
+    if: always() && (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && inputs.integration == 'true' && needs.lint.result == 'success' && (needs.molecule-unit-ubuntu.result == 'success' || inputs.unit != 'true')
     env:
       TEST_TYPE: integration
       AWS_DEFAULT_REGION: ${{ inputs.region }}

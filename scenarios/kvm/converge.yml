@@ -25,8 +25,8 @@
     - name: Set facts
       ansible.builtin.set_fact:
         ansible_user: "{{ ansible_facts['env']['USER'] }}"
-        interface_main_ipv4: "{{ ansible_facts['default_ipv4'].address }}"
-        interface_main_ipv6: "{{ ansible_facts['default_ipv6'].address }}"
+        interface_main_ipv4: "{{ ansible_facts['default_ipv4'].address | default('') }}"
+        interface_main_ipv6: "{{ ansible_facts['default_ipv6'].address | default('') }}"
         ipv6_enabled: "{{ ansible_facts['all_ipv6_addresses'] | default([]) | length > 0 }}"
 
     # The cloud images are configured by cloud-init, like the Hetzner servers

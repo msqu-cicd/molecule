@@ -302,7 +302,7 @@ jobs:
     container:
       image: ghcr.io/msqu-devops/molecule:runner@sha256:a5afe0d813f4c069aed85b411fabb02a8e08c0b606a424624998e2afc93abdf6
     needs: [changes, lint, molecule-unit-debian]
-    if: always() && github.event_name != 'push' && (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && inputs.integration == 'true' && (needs.molecule-unit-debian.result == 'success' || inputs.unit != 'true')
+    if: always() && github.event_name != 'push' && (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && inputs.integration == 'true' && needs.lint.result == 'success' && (needs.molecule-unit-debian.result == 'success' || inputs.unit != 'true')
     env:
       TEST_TYPE: integration
       HCLOUD_SERVER_STATE: stopped
@@ -489,7 +489,7 @@ jobs:
           if [ -n "$SERVER_LIST" ]; then
             echo "Found orphaned servers:"
             echo "$SERVER_LIST"
-            echo "$SERVER_LIST" | while read server; do
+            echo "$SERVER_LIST" | while read -r server; do
               echo "Deleting server: $server"
               hcloud server delete "$server" || echo "Failed to delete $server"
             done
@@ -497,18 +497,20 @@ jobs:
             echo "No orphaned servers found"
           fi
 
-          # Safety net for servers of any repo older than 2 hours (hcloud age: Xs/Xm/Xh up to 23h, then Xd)
-          echo "Checking for old CI servers (>2 hours old)..."
-          OLD_SERVERS=$(echo "$ALL_SERVERS" | awk '$2 ~ /^([3-9]|1[0-9]|2[0-3])h$|^[0-9]+d$/ && $1 ~ /ci-|molecule-|test-/ {print $1}')
+          # Safety net for molecule servers of any repo older than 3 hours, selected by the
+          # managed-by=molecule label of the scenario's platforms (hcloud age: Xs/Xm/Xh up to 23h, then Xd)
+          echo "Checking for old molecule servers (label managed-by=molecule, >3 hours old)..."
+          MOLECULE_SERVERS=$(hcloud server list -l managed-by=molecule -o noheader -o columns=name,age)
+          OLD_SERVERS=$(echo "$MOLECULE_SERVERS" | awk '$2 ~ /^([3-9]|1[0-9]|2[0-3])h$|^[0-9]+d$/ {print $1}')
           if [ -n "$OLD_SERVERS" ]; then
-            echo "Found old CI servers:"
+            echo "Found old molecule servers:"
             echo "$OLD_SERVERS"
-            echo "$OLD_SERVERS" | while read server; do
+            echo "$OLD_SERVERS" | while read -r server; do
               echo "Deleting old server: $server"
               hcloud server delete "$server" || echo "Failed to delete old server $server"
             done
           else
-            echo "No old CI servers found"
+            echo "No old molecule servers found"
           fi
 
       - name: Cleanup workspace

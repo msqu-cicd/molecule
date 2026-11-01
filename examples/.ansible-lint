@@ -4,3 +4,5 @@ warn_list:
   - no-handler
   - command-instead-of-module
   - yaml
+kinds:
+  - tasks: "**/molecule/*/converge_override.yml"

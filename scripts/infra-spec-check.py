@@ -14,10 +14,11 @@ infra's pre_tasks the play provides ansible_facts['packages'], here as an empty 
 module: the runner's real packages say nothing about the hosts, and package_facts needs the package
 manager's Python bindings, which the CI image's interpreter lacks.
 
-A play's literal hosts: pattern limits the hosts; a templated one ("{{ target }}") means all, the
-infra Makefile's default target. Not modelled: vars: that a play, a roles: entry or include_role
-passes to the role (infra passes none to its roles today) and the role's meta/main.yml dependencies
-(none of the roles has any; import_role would need them on the roles path).
+A play's literal hosts: pattern (a list joins with ':') limits the hosts; a templated one
+("{{ target }}") means all, the infra Makefile's default target. Not modelled: vars: that a play,
+a roles: entry or include_role passes to the role (infra passes none to its roles today) and the
+role's meta/main.yml dependencies (none of the roles has any; import_role would need them on the
+roles path).
 
 Failures print the host, the task and the assertion or type error, never variable values (the
 inventories hold secrets). Exit 1 on any failure, 0 otherwise, also when no playbook applies the
@@ -164,7 +165,10 @@ def entry_conditions(infra_dir, name):
             if not isinstance(play, dict) or "hosts" not in play:
                 continue
             runtime = derived.union(*(runtime_names(infra_dir, play.get(sec)) for sec in ("pre_tasks", "tasks", "post_tasks")))
-            hosts = play["hosts"] if isinstance(play["hosts"], str) and "{{" not in play["hosts"] else "all"
+            hosts = play["hosts"]
+            if isinstance(hosts, list):
+                hosts = ":".join(str(h) for h in hosts)
+            hosts = hosts if isinstance(hosts, str) and "{{" not in hosts else "all"
             for item in play.get("roles") or []:
                 rname = (item.get("role") or item.get("name")) if isinstance(item, dict) else item
                 if same_role(rname, name):
@@ -283,6 +287,7 @@ def main():
                 fh.write(play_text(name, role_dir, cond, hosts))
             for inv in invs:
                 if inv not in inventories:
+                    print(f"  WARNING {inv}: no such inventory in {inv_dir}, skipped")
                     continue
                 failed += check_inventory(tmp, env, os.path.join(inv_dir, inv), inv, limit)
     for inv, host, task, reason in failed:
