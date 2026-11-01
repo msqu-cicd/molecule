@@ -1,0 +1,46 @@
+name: AI Review
+
+# Caller for the shared AI review workflow, see https://git.msqu.de/CICD/ai-review (README).
+# Reviews run on PR open/reopen and on a "/review" comment; "workflow_dispatch" audits the
+# whole repository into an issue. Needs the secret CLAUDE_CODE_OAUTH_TOKEN on the CICD org (or this repo).
+
+on:
+  pull_request:
+    types:
+      - opened
+      - reopened
+  issue_comment:
+    types:
+      - created
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'audit (whole repository into an issue)'
+        default: audit
+        type: string
+      model:
+        description: 'opus or sonnet'
+        default: opus
+        type: string
+
+# One review at a time per PR. Never cancel a running review: every comment on the PR also
+# creates a run in this group (its job is skipped below), and cancelling would kill the review.
+concurrency:
+  group: ai-review-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  review:
+    # Comments that are not a /review command on a pull request never start a runner job.
+    # The shared workflow also checks that the commenter has write access.
+    if: github.event_name != 'issue_comment' || (github.event.issue.pull_request && startsWith(github.event.comment.body, '/review'))
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    uses: CICD/ai-review/.gitea/workflows/review.yml@main
+    with:
+      mode: ${{ inputs.mode || '' }}
+      model: ${{ inputs.model || '' }}
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
