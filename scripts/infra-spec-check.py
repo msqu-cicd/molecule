@@ -255,8 +255,11 @@ def main():
 
 def check_inventory(tmp, env, inv_path, inv, limit):
     """Run the generated play against one inventory; failures as (inventory, host, task, reason)."""
-    proc = subprocess.run(["ansible-playbook", "-i", inv_path, *limit, "-e",
-                           "ansible_python_interpreter=" + (shutil.which("python3") or "python3"), "play.yml"],
+    # Extra vars outrank inventory variables: an ansible_connection or ansible_become set in an
+    # inventory must never turn this into a real connection or a privilege escalation.
+    proc = subprocess.run(["ansible-playbook", "-i", inv_path, *limit,
+                           "-e", "ansible_connection=local", "-e", "ansible_become=false",
+                           "-e", "ansible_python_interpreter=" + (shutil.which("python3") or "python3"), "play.yml"],
                           cwd=tmp, env=env, capture_output=True, text=True)
     out = proc.stdout + proc.stderr
     found = failures(out)
