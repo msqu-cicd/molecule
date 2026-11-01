@@ -129,8 +129,11 @@ jobs:
     needs: [changes, lint]
     if: needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true'
     steps:
+      # Role code from the change runs in this job: no checkout keeps its token in .git/config
       - name: Checkout repository
         uses: https://github.com/actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Checkout infra repository
         uses: https://github.com/actions/checkout@v7
@@ -140,6 +143,7 @@ jobs:
           token: '${{ secrets.CI_RUNNER_PAT }}'
           path: git_infra
           ref: main
+          persist-credentials: false
           sparse-checkout-cone-mode: false
           sparse-checkout: |
             /group_vars/
@@ -155,6 +159,7 @@ jobs:
           token: '${{ secrets.CI_RUNNER_PAT }}'
           path: git_molecule
           ref: ${{ inputs.molecule_ref }}
+          persist-credentials: false
           sparse-checkout: |
             scripts
 
@@ -162,7 +167,9 @@ jobs:
         env:
           ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
         run: |
+          umask 077
           printf '%s\n' "$ANSIBLE_VAULT_PASSWORD" > "$GITHUB_WORKSPACE/.vault"
+          unset ANSIBLE_VAULT_PASSWORD
           export ANSIBLE_VAULT_PASSWORD_FILE="$GITHUB_WORKSPACE/.vault"
           python3 git_molecule/scripts/infra-spec-check.py "$GITHUB_WORKSPACE" git_infra "${GITHUB_REPOSITORY#*/}"
 
