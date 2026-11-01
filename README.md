@@ -55,6 +55,8 @@ TCG (works, but slow) without it.
 ### Guests
 - q35 machine, `-accel kvm -cpu host`, one qcow2 overlay per platform on the cached base image
 - cloud-init NoCloud seed with a per-run root key (`disable_root: false`, no password login)
+- the NIC is named `eth0` like on the servers and the Hetzner images (fixed MAC per platform plus a
+  `network-config` with `set-name: eth0`; the cloud image would otherwise name it `enp0s2`)
 - the serial console is printed when a guest does not become reachable over SSH
 - `destroy` sends SIGTERM to each QEMU and removes the work directory
 - needs `qemu-system-x86`, `qemu-utils` and `genisoimage` in the job container; `role-kvm.yml` installs
