@@ -133,6 +133,60 @@ jobs:
       - name: Yaml Lint
         run: yamllint -f colored .
 
+  # The role's argument specs and asserts against the real infra inventories: every host an infra
+  # playbook applies the role to, local connection, no test server (scripts/infra-spec-check.py).
+  infra-spec:
+    runs-on: molecule
+    container:
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:a5afe0d813f4c069aed85b411fabb02a8e08c0b606a424624998e2afc93abdf6
+    needs: [changes, lint]
+    if: needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true'
+    steps:
+      - name: Checkout repository
+        uses: https://github.com/actions/checkout@v7
+
+      - name: Checkout infra repository
+        uses: https://github.com/actions/checkout@v7
+        with:
+          github-server-url: https://git.msqu.de
+          repository: infrastructure/infra
+          token: '${{ secrets.CI_RUNNER_PAT }}'
+          path: git_infra
+          ref: main
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /group_vars/
+            /host_vars/
+            /inventories/
+            /*.yml
+
+      - name: Checkout the check script
+        uses: https://github.com/actions/checkout@v7
+        with:
+          github-server-url: https://git.msqu.de
+          repository: cicd/molecule
+          token: '${{ secrets.CI_RUNNER_PAT }}'
+          path: git_molecule
+          ref: ${{ inputs.molecule_ref }}
+          sparse-checkout: |
+            scripts
+
+      - name: Check the role against the infra inventories
+        env:
+          ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
+        run: |
+          printf '%s\n' "$ANSIBLE_VAULT_PASSWORD" > "$GITHUB_WORKSPACE/.vault"
+          export ANSIBLE_VAULT_PASSWORD_FILE="$GITHUB_WORKSPACE/.vault"
+          python3 git_molecule/scripts/infra-spec-check.py "$GITHUB_WORKSPACE" git_infra "${GITHUB_REPOSITORY#*/}"
+
+      - name: Cleanup workspace
+        if: always()
+        shell: bash
+        run: |
+          cd ${GITHUB_WORKSPACE}
+          shopt -s dotglob
+          rm -rf *
+
   molecule-unit-debian:
     runs-on: molecule
     container:

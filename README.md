@@ -148,6 +148,13 @@ becomes `kvm_memory` (default `'2048'`) and `kvm_vcpus` (`'2'`); `debian_distro`
 
 1. **changes**: skip the tests when only ignored files changed (deletions count as changes)
 2. **lint**: ansible-lint and yamllint
+   - **infra-spec** (next to the tests, no test server): `scripts/infra-spec-check.py` runs the role's
+     `tasks/assert.yml` and validates `meta/argument_specs.yml` for every host an Infrastructure/infra playbook
+     applies the role to, with the host's real variables over a local connection. It reads the playbooks'
+     `roles:`/`include_role` entries and their `when:` (clauses on facts, on `pre_tasks` variables or on
+     group_vars computed from facts count as true) and uses the inventories of the infra Makefile (server
+     playbooks: every server inventory with `--limit '!localhost'`; workstation playbooks: `workstations.yml`).
+     It fails when a spec or assert rejects a value infra sets; errors name the variable and the type, never the value.
 3. **unit** (Debian 13): role with `tests/vars.yml`
 4. **integration** (Debian 13): role with the infra `group_vars`
 5. **cleanup** (hetznercloud only; always, also after failures/cancellations): deletes leftover servers and
