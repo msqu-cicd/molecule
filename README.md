@@ -68,7 +68,7 @@ TCG (works, but slow) without it.
 
 Used by roles that need distributions Hetzner does not offer (Arch Linux workstations).
 - `VULTR_API_KEY` (required), `INSTANCE_SIZE` (default `vc2-1c-1gb`, 25 GB disk), `INSTANCE_REGION` (default `fra`)
-- One VPC per repo (`molecule-<repo>`), instances are labelled `molecule-<repo>`
+- Instances are labelled `molecule-<repo>`, without a VPC (the single test instance needs no private network)
 
 ## EC2
 
@@ -154,13 +154,16 @@ becomes `kvm_memory` (default `'2048'`) and `kvm_vcpus` (`'2'`); `debian_distro`
      `tasks/assert.yml` and validates `meta/argument_specs.yml` for every host an Infrastructure/infra playbook
      applies the role to, with the host's real variables over a local connection. It reads the playbooks'
      `roles:`/`include_role` entries and their `when:` (clauses on facts, on `pre_tasks` variables or on
-     group_vars computed from facts count as true) and uses the inventories of the infra Makefile (server
-     playbooks: every server inventory with `--limit '!localhost'`; workstation playbooks: `workstations.yml`).
+     group_vars computed from facts count as true), checks each entry on its own with its play's `hosts:`
+     pattern and uses the inventories of the infra Makefile (server playbooks: every server inventory with
+     `--limit '!localhost'`; workstation playbooks: `workstations.yml`). Missing inventories and imported task
+     files that are not in the checkout print a warning.
      It fails when a spec or assert rejects a value infra sets; errors name the variable and the type, never the value.
 3. **unit** (Debian 13): role with `tests/vars.yml`
 4. **integration** (Debian 13): role with the infra `group_vars`
 5. **cleanup** (hetznercloud only; always, also after failures/cancellations): deletes leftover servers and
-   DNS records, then a safety net deletes servers labelled `managed-by=molecule` of any repo older than 3 hours
+   DNS records, then a safety net deletes servers labelled `managed-by=molecule` of any repo older than 3 hours.
+   `role-vultr.yml` has its own cleanup job, which skips whenever its integration test skips.
 
 The fleet runs Debian 13 only, so there are no Ubuntu jobs. Pushes to the default branch (merges, already
 tested in their pull request) skip the integration test: `role-kvm.yml` runs lint and the unit test,
@@ -179,7 +182,8 @@ Runs of one repo share the concurrency group `molecule-tests`, because the serve
 
 - `ci.yml` lints the scenarios, the examples and the workflows on every push and pull request.
 - `smoke-test.yml` runs the full Ansible/apt pipeline against the scenarios of the pushed ref
-  (`molecule_ref`) whenever `scenarios/**` changes, and fails if apt fails.
+  (`molecule_ref`) whenever `scenarios/**` changes, and fails if apt fails. A newer push queues behind a
+  running smoke test instead of cancelling it; a smoke test cancelled by hand leaves the apt run running.
 - The runner image is pinned by digest in the workflows; Renovate updates it.
 
 ## Local runs

@@ -13,9 +13,12 @@ on:
       - 'scenarios/**'
   workflow_dispatch:
 
+# Queue instead of cancelling: a cancel stops only this poller, never the dispatched Ansible/apt
+# run (the runner kills the job container without running later steps), and the next apt run
+# waits for that one anyway (the apt caller's concurrency group does not cancel)
 concurrency:
   group: smoke-test
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   apt:

@@ -215,8 +215,9 @@ jobs:
           ssh-keygen -y -f ~/.ssh/id_ed25519 > ~/.ssh/id_ed25519.pub
           echo "SSH Key Fingerprint: $(ssh-keygen -l -E md5 -f ~/.ssh/id_ed25519)"
           ssh-keyscan -p 22222 git.msqu.de >> ~/.ssh/known_hosts 2>/dev/null || true
+          # test hosts get new host keys every run; git.msqu.de stays checked against the keyscan above
           cat > ~/.ssh/config << EOF
-          Host *
+          Host * !git.msqu.de
             StrictHostKeyChecking no
             UserKnownHostsFile=/dev/null
           EOF
@@ -291,13 +292,14 @@ jobs:
           rm -rf *
 
   # Runs after all test jobs, also after failures and cancellations: deletes leftover servers
-  # (and, via the role's cleanup.yml, their DNS records) instead of leaving them stopped
+  # (and, via the role's cleanup.yml, their DNS records) instead of leaving them stopped.
+  # Skips with the tests (nothing relevant changed, or a push its pull request already tested).
   molecule-cleanup:
     runs-on: molecule
     container:
       image: ghcr.io/msqu-devops/molecule:runner@sha256:a5afe0d813f4c069aed85b411fabb02a8e08c0b606a424624998e2afc93abdf6
-    if: always()
-    needs: [molecule-integration]
+    if: always() && (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true')
+    needs: [changes, molecule-integration]
     env:
       MOLECULE_SCENARIO_NAME: vultr
       MOLECULE_DISTRO: ${{ inputs.distro }}
@@ -324,8 +326,9 @@ jobs:
           ssh-keygen -y -f ~/.ssh/id_ed25519 > ~/.ssh/id_ed25519.pub
           echo "SSH Key Fingerprint: $(ssh-keygen -l -E md5 -f ~/.ssh/id_ed25519)"
           ssh-keyscan -p 22222 git.msqu.de >> ~/.ssh/known_hosts 2>/dev/null || true
+          # test hosts get new host keys every run; git.msqu.de stays checked against the keyscan above
           cat > ~/.ssh/config << EOF
-          Host *
+          Host * !git.msqu.de
             StrictHostKeyChecking no
             UserKnownHostsFile=/dev/null
           EOF
@@ -378,20 +381,6 @@ jobs:
             done
           else
             echo "No orphaned instances found"
-          fi
-
-          echo "Checking for orphaned VPCs..."
-          ALL_VPCS=$(vultr-cli vpc list --output json)
-          VPC_LIST=$(echo "$ALL_VPCS" | jq -r '.vpcs[]? | select(.description == "molecule-'${CI_PROJECT_NAME_MOLECULE}'") | .id')
-          if [ -n "$VPC_LIST" ]; then
-            echo "Found orphaned VPCs:"
-            echo "$VPC_LIST"
-            echo "$VPC_LIST" | while read vpc_id; do
-              echo "Deleting VPC: $vpc_id"
-              vultr-cli vpc delete "$vpc_id" || echo "Failed to delete VPC $vpc_id"
-            done
-          else
-            echo "No orphaned VPCs found"
           fi
 
       - name: Cleanup workspace

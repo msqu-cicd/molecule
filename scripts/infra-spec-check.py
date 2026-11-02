@@ -15,10 +15,11 @@ module: the runner's real packages say nothing about the hosts, and package_fact
 manager's Python bindings, which the CI image's interpreter lacks.
 
 A play's literal hosts: pattern (a list joins with ':') limits the hosts; a templated one
-("{{ target }}") means all, the infra Makefile's default target. Not modelled: vars: that a play,
-a roles: entry or include_role passes to the role (infra passes none to its roles today) and the
-role's meta/main.yml dependencies (none of the roles has any; import_role would need them on the
-roles path).
+("{{ target }}") means all, the infra Makefile's default target. Every entry runs on its own with
+its hosts: pattern and its condition, so entries never widen each other's hosts. An imported task
+file missing from INFRA_DIR prints a warning. Not modelled: vars: that a play, a roles: entry or
+include_role passes to the role (infra passes none to its roles today) and the role's meta/main.yml
+dependencies (none of the roles has any; import_role would need them on the roles path).
 
 Failures print the host, the task and the assertion or type error, never variable values (the
 inventories hold secrets). Exit 1 on any failure, 0 otherwise, also when no playbook applies the
@@ -124,6 +125,9 @@ def runtime_names(infra_dir, tasks, depth=0):
             path = os.path.join(infra_dir, ref) if isinstance(ref, str) and "{{" not in ref else ""
             if depth < 3 and os.path.isfile(path):
                 names |= runtime_names(infra_dir, load_yaml(path), depth + 1)
+            elif depth < 3 and path:
+                # e.g. outside the workflow's sparse checkout: its set_fact/register names stay unknown
+                print(f"WARNING {ref}: imported task file not found in {infra_dir}, its runtime variables are not known")
     return names
 
 
@@ -271,25 +275,27 @@ def main():
                 os.symlink(os.path.join(infra_dir, sub), os.path.join(tmp, sub))
         env = dict(os.environ, ANSIBLE_ROLES_PATH=os.path.join(tmp, "roles"), ANSIBLE_STDOUT_CALLBACK="default",
                    ANSIBLE_CALLBACK_RESULT_FORMAT="json", ANSIBLE_NOCOLOR="1", ANSIBLE_LOCAL_TEMP=os.path.join(tmp, "tmp"))
+        # Job containers have no USER; defaults such as lookup('env', 'USER') would come out empty
+        env.setdefault("USER", "infra-spec")
         for playbook in sorted({e[0] for e in entries}):
-            mine = [e for e in entries if e[0] == playbook]
-            cond = condition(mine)
-            patterns = sorted({e[3] for e in mine})
-            hosts = "all" if "all" in patterns else ":".join(patterns)
             if playbook.startswith("workstation"):
                 invs, limit = WORKSTATION_INVENTORIES, []
             elif playbook in PLAYBOOK_INVENTORIES:
                 invs, limit = PLAYBOOK_INVENTORIES[playbook], []
             else:
                 invs, limit = [i for i in inventories if i not in SERVER_EXCLUDE], ["--limit", "!localhost"]
-            print(f"{name}: applied by {playbook} on {', '.join(invs)}; hosts: {hosts}; host condition: {cond}")
-            with open(os.path.join(tmp, "play.yml"), "w", encoding="utf-8") as fh:
-                fh.write(play_text(name, role_dir, cond, hosts))
-            for inv in invs:
-                if inv not in inventories:
-                    print(f"  WARNING {inv}: no such inventory in {inv_dir}, skipped")
-                    continue
-                failed += check_inventory(tmp, env, os.path.join(inv_dir, inv), inv, limit)
+            # One run per entry: merged into one play, a when-less entry on one group would open
+            # every other entry's hosts and an exclusion (web:!foo) would apply to all joined
+            # patterns; as plays of one run, a play whose hosts all fail would end the run
+            for hosts, cond in sorted({(e[3], condition([e])) for e in entries if e[0] == playbook}):
+                print(f"{name}: applied by {playbook} on {', '.join(invs)}; hosts: {hosts}; host condition: {cond}")
+                with open(os.path.join(tmp, "play.yml"), "w", encoding="utf-8") as fh:
+                    fh.write(play_text(name, role_dir, cond, hosts))
+                for inv in invs:
+                    if inv not in inventories:
+                        print(f"  WARNING {inv}: no such inventory in {inv_dir}, skipped")
+                        continue
+                    failed += check_inventory(tmp, env, os.path.join(inv_dir, inv), inv, limit)
     for inv, host, task, reason in failed:
         print(f"FAIL {inv} {host}: {task}: {reason}")
     return 1 if failed else 0
