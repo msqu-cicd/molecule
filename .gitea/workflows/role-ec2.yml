@@ -125,7 +125,7 @@ jobs:
   lint:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:a8f5049e07636e335e70dec5992b1cb539a9d42b6ba7c426a7ecb85e8ff2ca53
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:d89d2bf16c6cd5d755f2b5a6769780c9828b85fe100b4147a06b81dd41caa191
     needs: changes
     if: needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true'
     steps:
@@ -141,7 +141,7 @@ jobs:
   molecule-unit-debian:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:a8f5049e07636e335e70dec5992b1cb539a9d42b6ba7c426a7ecb85e8ff2ca53
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:d89d2bf16c6cd5d755f2b5a6769780c9828b85fe100b4147a06b81dd41caa191
     needs: [changes, lint]
     if: (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && inputs.unit == 'true'
     env:
@@ -268,7 +268,7 @@ jobs:
   molecule-unit-ubuntu:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:a8f5049e07636e335e70dec5992b1cb539a9d42b6ba7c426a7ecb85e8ff2ca53
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:d89d2bf16c6cd5d755f2b5a6769780c9828b85fe100b4147a06b81dd41caa191
     needs: [changes, lint]
     if: (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && inputs.unit == 'true'
     env:
@@ -395,7 +395,7 @@ jobs:
   molecule-integration-debian:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:a8f5049e07636e335e70dec5992b1cb539a9d42b6ba7c426a7ecb85e8ff2ca53
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:d89d2bf16c6cd5d755f2b5a6769780c9828b85fe100b4147a06b81dd41caa191
     needs: [changes, lint, molecule-unit-debian]
     if: always() && (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && inputs.integration == 'true' && needs.lint.result == 'success' && (needs.molecule-unit-debian.result == 'success' || inputs.unit != 'true')
     env:
@@ -529,7 +529,7 @@ jobs:
   molecule-integration-ubuntu:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:a8f5049e07636e335e70dec5992b1cb539a9d42b6ba7c426a7ecb85e8ff2ca53
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:d89d2bf16c6cd5d755f2b5a6769780c9828b85fe100b4147a06b81dd41caa191
     needs: [changes, lint, molecule-unit-ubuntu]
     if: always() && (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && inputs.integration == 'true' && needs.lint.result == 'success' && (needs.molecule-unit-ubuntu.result == 'success' || inputs.unit != 'true')
     env:
@@ -665,7 +665,7 @@ jobs:
   molecule-cleanup:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:a8f5049e07636e335e70dec5992b1cb539a9d42b6ba7c426a7ecb85e8ff2ca53
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:d89d2bf16c6cd5d755f2b5a6769780c9828b85fe100b4147a06b81dd41caa191
     if: always() && (inputs.unit == 'true' || inputs.integration == 'true')
     needs: [molecule-unit-debian, molecule-unit-ubuntu, molecule-integration-debian, molecule-integration-ubuntu]
     steps:
