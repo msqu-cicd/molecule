@@ -24,7 +24,7 @@ jobs:
   apt:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:e41e8c0ee1eb9ebe4a447d9712092a9fd367d2aa78856de3d1fa9cf52f6e966f
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:e494752dd4cf8814d76bd97bb7294a12ab5841360d7ab6cc69b4e73dc279abc8
     timeout-minutes: 120
     steps:
       - name: Run Ansible/apt molecule tests with this molecule ref
