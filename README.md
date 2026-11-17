@@ -149,11 +149,8 @@ becomes `kvm_memory` (default `'2048'`) and `kvm_vcpus` (`'2'`); `debian_distro`
 ### Pipeline
 
 1. **changes**: skip the tests when only ignored files changed (deletions count as changes)
-2. **lint**: ansible-lint, yamllint and shellcheck (`*.sh`/`*.bash` files and extensionless files with a
-   `sh`/`bash` shebang; `*.sh.j2` templates are skipped, they are not valid shell before rendering)
-   - **secret-scan** (every push and pull request, independent of `changes`): gitleaks over the checked-out
-     tree with its built-in rules; a `.gitleaks.toml`, `.gitleaksignore` or `gitleaks:allow` in the role is
-     ignored, so a change cannot switch the scan off. Findings are redacted in the log.
+2. **lint**: ansible-lint, yamllint and shellcheck (tracked `*.sh`/`*.bash` files and extensionless files
+   with a `sh`/`bash` shebang; `*.sh.j2` templates are skipped, they are not valid shell before rendering)
    - **infra-spec** (next to the tests, no test server): `scripts/infra-spec-check.py` runs the role's
      `tasks/assert.yml` and validates `meta/argument_specs.yml` for every host an Infrastructure/infra playbook
      applies the role to, with the host's real variables over a local connection. It reads the playbooks'
@@ -168,6 +165,11 @@ becomes `kvm_memory` (default `'2048'`) and `kvm_vcpus` (`'2'`); `debian_distro`
 5. **cleanup** (hetznercloud only; always, also after failures/cancellations): deletes leftover servers and
    DNS records, then a safety net deletes servers labelled `managed-by=molecule` of any repo older than 3 hours.
    `role-vultr.yml` has its own cleanup job, which skips whenever its integration test skips.
+
+Outside that order, with no `needs`, **secret-scan** runs gitleaks over the checked-out tree on every pull
+request, whatever it changed, and on every push the caller's `paths-ignore` lets through. It uses gitleaks'
+built-in rules only: a `.gitleaks.toml`, `.gitleaksignore` or `gitleaks:allow` in the role is ignored, so a
+change cannot switch the scan off. Findings are redacted in the log.
 
 The fleet runs Debian 13 only, so there are no Ubuntu jobs. Pushes to the default branch (merges, already
 tested in their pull request) skip the integration test: `role-kvm.yml` runs lint and the unit test,

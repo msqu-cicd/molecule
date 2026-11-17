@@ -139,11 +139,12 @@ jobs:
       - name: Yaml Lint
         run: yamllint -f colored .
 
-      # *.sh/*.bash files and extensionless files with a sh/bash shebang. Templates (*.sh.j2) are
+      # Tracked *.sh/*.bash files and extensionless files with a sh/bash shebang; git ls-files keeps
+      # out what ansible-lint installs into the checkout (.ansible/, .cache/). Templates (*.sh.j2) are
       # not valid shell before rendering and are left to the AI review.
       - name: Shell Lint
         run: |
-          find . -path ./.git -prune -o -type f -print0 |
+          git ls-files -z |
             while IFS= read -r -d '' f; do
               case ${f##*/} in
                 *.sh | *.bash) printf '%s\0' "$f" ;;
@@ -152,7 +153,8 @@ jobs:
               esac
             done | xargs -0 -r shellcheck
 
-  # Every push and pull request, whatever changed: a secret in an ignored path (README, .gitea/**)
+  # Independent of the changes job: every pull request, whatever it changed, and every push the
+  # caller's paths-ignore lets through. A secret in a path changes ignores (README, .gitea/**)
   # counts too. The scanner's built-in rules only: a .gitleaks.toml, .gitleaksignore or inline
   # gitleaks:allow in the change cannot switch the scan off. --redact keeps findings out of the log.
   secret-scan:
