@@ -1,0 +1,14 @@
+---
+# actionlint configuration for Gitea Actions; CI runs
+#   actionlint -config-file .gitea/actionlint.yaml .gitea/workflows/*.yml examples/*.yml
+self-hosted-runner:
+  # labels of the git.msqu.de runners
+  labels:
+    - molecule
+    - kvm
+    - ubuntu-26.04
+paths:
+  # Gitea resolves full URLs in uses: (https://github.com/actions/checkout@v7); GitHub syntax has no such form
+  "**/*.yml":
+    ignore:
+      - 'specifying action "https://[^"]+" in invalid format'

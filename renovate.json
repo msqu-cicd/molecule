@@ -5,5 +5,19 @@
   ],
   "prHourlyLimit": 10,
   "prConcurrentLimit": 20,
-  "branchConcurrentLimit": 20
+  "branchConcurrentLimit": 20,
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Version pins followed by a '# renovate: datasource=... depName=...' marker on the same line",
+      "managerFilePatterns": [
+        "/^\\.gitea/workflows/ci\\.yml$/"
+      ],
+      "matchStrings": [
+        "(?<currentValue>\\d+\\.\\d+\\.\\d+)[^\\n]*#\\s*renovate:\\s*datasource=(?<datasource>\\S+)\\s+depName=(?<depName>\\S+)"
+      ],
+      "versioningTemplate": "semver",
+      "extractVersionTemplate": "^v?(?<version>.*)$"
+    }
+  ]
 }

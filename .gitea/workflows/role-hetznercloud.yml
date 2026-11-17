@@ -227,9 +227,9 @@ jobs:
         if: always()
         shell: bash
         run: |
-          cd ${GITHUB_WORKSPACE}
+          cd "${GITHUB_WORKSPACE}"
           shopt -s dotglob
-          rm -rf *
+          rm -rf ./*
 
   molecule-unit-debian:
     runs-on: molecule
@@ -251,9 +251,9 @@ jobs:
         run: |
           {
             echo "CI_HOSTNAME=$(echo '${{ env.MOLECULE_DISTRO }}' | tr -dc '[:alnum:]\n\r' | tr '[:upper:]' '[:lower:]')"
-            echo "CI_PROJECT_NAME_MOLECULE=$(echo ${GITHUB_REPOSITORY#*/} | tr '_' '-')"
+            echo "CI_PROJECT_NAME_MOLECULE=$(echo "${GITHUB_REPOSITORY#*/}" | tr '_' '-')"
             echo "CI_PROJECT_DIR=$GITHUB_WORKSPACE"
-          } >> $GITHUB_ENV
+          } >> "$GITHUB_ENV"
 
       - name: Configure SSH
         env:
@@ -290,17 +290,17 @@ jobs:
 
       - name: Setup molecule scenario
         run: |
-          mkdir -p ${GITHUB_WORKSPACE}/molecule/default
+          mkdir -p "${GITHUB_WORKSPACE}/molecule/default"
           rsync -avzh --ignore-existing --ignore-errors \
             git_molecule/scenarios/hetznercloud/ \
-            ${GITHUB_WORKSPACE}/molecule/default/
+            "${GITHUB_WORKSPACE}/molecule/default/"
 
       - name: Configure unit test variables
         run: |
           if [[ -f "${GITHUB_WORKSPACE}/tests/vars.yml" ]]; then
-            mkdir -p ${GITHUB_WORKSPACE}/molecule/default/group_vars/all/
-            rsync -aP ${GITHUB_WORKSPACE}/tests/vars.yml \
-              ${GITHUB_WORKSPACE}/molecule/default/group_vars/all/test_vars.yml
+            mkdir -p "${GITHUB_WORKSPACE}/molecule/default/group_vars/all/"
+            rsync -aP "${GITHUB_WORKSPACE}/tests/vars.yml" \
+              "${GITHUB_WORKSPACE}/molecule/default/group_vars/all/test_vars.yml"
           fi
 
       - name: Setup debugging session
@@ -313,7 +313,10 @@ jobs:
 
       - name: Run Molecule unit tests
         # word splitting of MOLECULE_ARGS is intended (multiple molecule CLI arguments)
-        run: molecule test $MOLECULE_ARGS
+        run: |
+          # word splitting on purpose: args is one string of molecule options
+          # shellcheck disable=SC2086
+          molecule test $MOLECULE_ARGS
         env:
           MOLECULE_ARGS: ${{ inputs.args }}
           ANSIBLE_FORCE_COLOR: '1'
@@ -331,9 +334,9 @@ jobs:
         if: always()
         shell: bash
         run: |
-          cd ${GITHUB_WORKSPACE}
+          cd "${GITHUB_WORKSPACE}"
           shopt -s dotglob
-          rm -rf *
+          rm -rf ./*
 
   molecule-integration-debian:
     runs-on: molecule
@@ -355,9 +358,9 @@ jobs:
         run: |
           {
             echo "CI_HOSTNAME=$(echo '${{ env.MOLECULE_DISTRO }}' | tr -dc '[:alnum:]\n\r' | tr '[:upper:]' '[:lower:]')"
-            echo "CI_PROJECT_NAME_MOLECULE=$(echo ${GITHUB_REPOSITORY#*/} | tr '_' '-')"
+            echo "CI_PROJECT_NAME_MOLECULE=$(echo "${GITHUB_REPOSITORY#*/}" | tr '_' '-')"
             echo "CI_PROJECT_DIR=$GITHUB_WORKSPACE"
-          } >> $GITHUB_ENV
+          } >> "$GITHUB_ENV"
 
       - name: Configure SSH
         env:
@@ -405,14 +408,14 @@ jobs:
 
       - name: Setup molecule scenario
         run: |
-          mkdir -p ${GITHUB_WORKSPACE}/molecule/default
+          mkdir -p "${GITHUB_WORKSPACE}/molecule/default"
           rsync -avzh --ignore-existing --ignore-errors \
             git_molecule/scenarios/hetznercloud/ \
-            ${GITHUB_WORKSPACE}/molecule/default/
+            "${GITHUB_WORKSPACE}/molecule/default/"
 
       - name: Configure integration test variables
         run: |
-          rsync -aP git_infra/group_vars ${GITHUB_WORKSPACE}/molecule/default/
+          rsync -aP git_infra/group_vars "${GITHUB_WORKSPACE}/molecule/default/"
 
       - name: Setup debugging session
         if: inputs.molecule_debug == 'true'
@@ -424,7 +427,10 @@ jobs:
 
       - name: Run Molecule integration tests
         # word splitting of MOLECULE_ARGS is intended (multiple molecule CLI arguments)
-        run: molecule test $MOLECULE_ARGS
+        run: |
+          # word splitting on purpose: args is one string of molecule options
+          # shellcheck disable=SC2086
+          molecule test $MOLECULE_ARGS
         env:
           MOLECULE_ARGS: ${{ inputs.args }}
           ANSIBLE_FORCE_COLOR: '1'
@@ -442,9 +448,9 @@ jobs:
         if: always()
         shell: bash
         run: |
-          cd ${GITHUB_WORKSPACE}
+          cd "${GITHUB_WORKSPACE}"
           shopt -s dotglob
-          rm -rf *
+          rm -rf ./*
 
   molecule-cleanup:
     runs-on: molecule
@@ -464,9 +470,9 @@ jobs:
         run: |
           {
             echo "CI_HOSTNAME=$(echo '${{ env.MOLECULE_DISTRO }}' | tr -dc '[:alnum:]\n\r' | tr '[:upper:]' '[:lower:]')"
-            echo "CI_PROJECT_NAME_MOLECULE=$(echo ${GITHUB_REPOSITORY#*/} | tr '_' '-')"
+            echo "CI_PROJECT_NAME_MOLECULE=$(echo "${GITHUB_REPOSITORY#*/}" | tr '_' '-')"
             echo "CI_PROJECT_DIR=$GITHUB_WORKSPACE"
-          } >> $GITHUB_ENV
+          } >> "$GITHUB_ENV"
 
       - name: Configure SSH
         env:
@@ -503,10 +509,10 @@ jobs:
 
       - name: Setup molecule scenario
         run: |
-          mkdir -p ${GITHUB_WORKSPACE}/molecule/default
+          mkdir -p "${GITHUB_WORKSPACE}/molecule/default"
           rsync -avzh --ignore-existing --ignore-errors \
             git_molecule/scenarios/hetznercloud/ \
-            ${GITHUB_WORKSPACE}/molecule/default/
+            "${GITHUB_WORKSPACE}/molecule/default/"
 
       - name: Destroy leftover molecule resources
         continue-on-error: true
@@ -557,6 +563,6 @@ jobs:
         if: always()
         shell: bash
         run: |
-          cd ${GITHUB_WORKSPACE}
+          cd "${GITHUB_WORKSPACE}"
           shopt -s dotglob
-          rm -rf *
+          rm -rf ./*
