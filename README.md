@@ -149,7 +149,11 @@ becomes `kvm_memory` (default `'2048'`) and `kvm_vcpus` (`'2'`); `debian_distro`
 ### Pipeline
 
 1. **changes**: skip the tests when only ignored files changed (deletions count as changes)
-2. **lint**: ansible-lint and yamllint
+2. **lint**: ansible-lint, yamllint and shellcheck (`*.sh`/`*.bash` files and extensionless files with a
+   `sh`/`bash` shebang; `*.sh.j2` templates are skipped, they are not valid shell before rendering)
+   - **secret-scan** (every push and pull request, independent of `changes`): gitleaks over the checked-out
+     tree with its built-in rules; a `.gitleaks.toml`, `.gitleaksignore` or `gitleaks:allow` in the role is
+     ignored, so a change cannot switch the scan off. Findings are redacted in the log.
    - **infra-spec** (next to the tests, no test server): `scripts/infra-spec-check.py` runs the role's
      `tasks/assert.yml` and validates `meta/argument_specs.yml` for every host an Infrastructure/infra playbook
      applies the role to, with the host's real variables over a local connection. It reads the playbooks'
