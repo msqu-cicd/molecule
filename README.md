@@ -186,7 +186,10 @@ Runs of one repo share the concurrency group `molecule-tests`, because the serve
 
 ## Testing changes to this repository
 
-- `ci.yml` lints the scenarios, the examples and the workflows on every push and pull request.
+- `ci.yml` lints the scenarios, the examples and the workflows on every push and pull request: ansible-lint,
+  yamllint and actionlint (pinned, checksum-verified; it shellchecks the `run:` blocks). `.gitea/actionlint.yaml`
+  lists the Gitea runner labels and ignores the full-URL `uses:` form that Gitea supports and GitHub syntax lacks.
+  A `run:` block that relies on word splitting on purpose carries `# shellcheck disable=SC2086` with the reason.
 - `smoke-test.yml` runs the full Ansible/apt pipeline against the scenarios of the pushed ref
   (`molecule_ref`) whenever `scenarios/**` changes, and fails if apt fails. A newer push queues behind a
   running smoke test instead of cancelling it; a smoke test cancelled by hand leaves the apt run running.

@@ -37,3 +37,21 @@ jobs:
 
       - name: Yaml Lint
         run: yamllint -f colored scenarios .gitea examples
+
+      # The runner image's shellcheck checks the run: blocks; .gitea/actionlint.yaml holds the
+      # Gitea runner labels and ignores the full-URL uses: form Gitea supports
+      - name: Install actionlint
+        env:
+          ACTIONLINT_VERSION: 1.7.12 # renovate: datasource=github-releases depName=rhysd/actionlint
+        run: |
+          set -o pipefail
+          base="https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}"
+          tarball="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          dir=$(mktemp -d)
+          curl -fsSL --retry 2 -o "$dir/$tarball" "$base/$tarball"
+          curl -fsSL --retry 2 "$base/actionlint_${ACTIONLINT_VERSION}_checksums.txt" | grep "  ${tarball}\$" > "$dir/sum"
+          (cd "$dir" && sha256sum -c sum)
+          tar -xzf "$dir/$tarball" -C /usr/local/bin actionlint
+
+      - name: actionlint
+        run: actionlint -config-file .gitea/actionlint.yaml .gitea/workflows/*.yml examples/caller-molecule.yml

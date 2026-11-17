@@ -196,9 +196,9 @@ jobs:
         run: |
           {
             echo "CI_HOSTNAME=$(echo '${{ env.MOLECULE_DISTRO }}' | tr -dc '[:alnum:]\n\r' | tr '[:upper:]' '[:lower:]')"
-            echo "CI_PROJECT_NAME_MOLECULE=$(echo ${GITHUB_REPOSITORY#*/} | tr '_' '-')"
+            echo "CI_PROJECT_NAME_MOLECULE=$(echo "${GITHUB_REPOSITORY#*/}" | tr '_' '-')"
             echo "CI_PROJECT_DIR=$GITHUB_WORKSPACE"
-          } >> $GITHUB_ENV
+          } >> "$GITHUB_ENV"
 
       - name: Configure SSH
         env:
@@ -235,17 +235,17 @@ jobs:
 
       - name: Setup molecule scenario
         run: |
-          mkdir -p ${GITHUB_WORKSPACE}/molecule/default
+          mkdir -p "${GITHUB_WORKSPACE}/molecule/default"
           rsync -avzh --ignore-existing --ignore-errors \
             git_molecule/scenarios/ec2/ \
-            ${GITHUB_WORKSPACE}/molecule/default/
+            "${GITHUB_WORKSPACE}/molecule/default/"
 
       - name: Configure unit test variables
         run: |
           if [[ -f "${GITHUB_WORKSPACE}/tests/vars.yml" ]]; then
-            mkdir -p ${GITHUB_WORKSPACE}/molecule/default/group_vars/all/
-            rsync -aP ${GITHUB_WORKSPACE}/tests/vars.yml \
-              ${GITHUB_WORKSPACE}/molecule/default/group_vars/all/test_vars.yml
+            mkdir -p "${GITHUB_WORKSPACE}/molecule/default/group_vars/all/"
+            rsync -aP "${GITHUB_WORKSPACE}/tests/vars.yml" \
+              "${GITHUB_WORKSPACE}/molecule/default/group_vars/all/test_vars.yml"
           fi
 
       - name: Resolve EC2 image and subnet
@@ -267,7 +267,7 @@ jobs:
             echo "EC2_IMAGE_OWNER=$owner"
             echo "EC2_IMAGE_NAME=$name"
             echo "EC2_SUBNET_ID=$subnet"
-          } >> $GITHUB_ENV
+          } >> "$GITHUB_ENV"
           echo "image: $owner/$name ($arch), subnet: $subnet"
 
       - name: Setup debugging session
@@ -279,8 +279,10 @@ jobs:
           install-dependencies: false
 
       - name: Run Molecule unit tests
-        # word splitting of MOLECULE_ARGS is intended (multiple molecule CLI arguments)
-        run: molecule test $MOLECULE_ARGS
+        run: |
+          # word splitting on purpose: args is one string of molecule options
+          # shellcheck disable=SC2086
+          molecule test $MOLECULE_ARGS
         env:
           MOLECULE_ARGS: ${{ inputs.args }}
           ANSIBLE_FORCE_COLOR: '1'
@@ -298,9 +300,9 @@ jobs:
         if: always()
         shell: bash
         run: |
-          cd ${GITHUB_WORKSPACE}
+          cd "${GITHUB_WORKSPACE}"
           shopt -s dotglob
-          rm -rf *
+          rm -rf ./*
 
   molecule-unit-ubuntu:
     runs-on: molecule
@@ -323,9 +325,9 @@ jobs:
         run: |
           {
             echo "CI_HOSTNAME=$(echo '${{ env.MOLECULE_DISTRO }}' | tr -dc '[:alnum:]\n\r' | tr '[:upper:]' '[:lower:]')"
-            echo "CI_PROJECT_NAME_MOLECULE=$(echo ${GITHUB_REPOSITORY#*/} | tr '_' '-')"
+            echo "CI_PROJECT_NAME_MOLECULE=$(echo "${GITHUB_REPOSITORY#*/}" | tr '_' '-')"
             echo "CI_PROJECT_DIR=$GITHUB_WORKSPACE"
-          } >> $GITHUB_ENV
+          } >> "$GITHUB_ENV"
 
       - name: Configure SSH
         env:
@@ -362,17 +364,17 @@ jobs:
 
       - name: Setup molecule scenario
         run: |
-          mkdir -p ${GITHUB_WORKSPACE}/molecule/default
+          mkdir -p "${GITHUB_WORKSPACE}/molecule/default"
           rsync -avzh --ignore-existing --ignore-errors \
             git_molecule/scenarios/ec2/ \
-            ${GITHUB_WORKSPACE}/molecule/default/
+            "${GITHUB_WORKSPACE}/molecule/default/"
 
       - name: Configure unit test variables
         run: |
           if [[ -f "${GITHUB_WORKSPACE}/tests/vars.yml" ]]; then
-            mkdir -p ${GITHUB_WORKSPACE}/molecule/default/group_vars/all/
-            rsync -aP ${GITHUB_WORKSPACE}/tests/vars.yml \
-              ${GITHUB_WORKSPACE}/molecule/default/group_vars/all/test_vars.yml
+            mkdir -p "${GITHUB_WORKSPACE}/molecule/default/group_vars/all/"
+            rsync -aP "${GITHUB_WORKSPACE}/tests/vars.yml" \
+              "${GITHUB_WORKSPACE}/molecule/default/group_vars/all/test_vars.yml"
           fi
 
       - name: Resolve EC2 image and subnet
@@ -394,7 +396,7 @@ jobs:
             echo "EC2_IMAGE_OWNER=$owner"
             echo "EC2_IMAGE_NAME=$name"
             echo "EC2_SUBNET_ID=$subnet"
-          } >> $GITHUB_ENV
+          } >> "$GITHUB_ENV"
           echo "image: $owner/$name ($arch), subnet: $subnet"
 
       - name: Setup debugging session
@@ -406,8 +408,10 @@ jobs:
           install-dependencies: false
 
       - name: Run Molecule unit tests
-        # word splitting of MOLECULE_ARGS is intended (multiple molecule CLI arguments)
-        run: molecule test $MOLECULE_ARGS
+        run: |
+          # word splitting on purpose: args is one string of molecule options
+          # shellcheck disable=SC2086
+          molecule test $MOLECULE_ARGS
         env:
           MOLECULE_ARGS: ${{ inputs.args }}
           ANSIBLE_FORCE_COLOR: '1'
@@ -425,9 +429,9 @@ jobs:
         if: always()
         shell: bash
         run: |
-          cd ${GITHUB_WORKSPACE}
+          cd "${GITHUB_WORKSPACE}"
           shopt -s dotglob
-          rm -rf *
+          rm -rf ./*
 
   molecule-integration-debian:
     runs-on: molecule
@@ -450,9 +454,9 @@ jobs:
         run: |
           {
             echo "CI_HOSTNAME=$(echo '${{ env.MOLECULE_DISTRO }}' | tr -dc '[:alnum:]\n\r' | tr '[:upper:]' '[:lower:]')"
-            echo "CI_PROJECT_NAME_MOLECULE=$(echo ${GITHUB_REPOSITORY#*/} | tr '_' '-')"
+            echo "CI_PROJECT_NAME_MOLECULE=$(echo "${GITHUB_REPOSITORY#*/}" | tr '_' '-')"
             echo "CI_PROJECT_DIR=$GITHUB_WORKSPACE"
-          } >> $GITHUB_ENV
+          } >> "$GITHUB_ENV"
 
       - name: Configure SSH
         env:
@@ -500,14 +504,14 @@ jobs:
 
       - name: Setup molecule scenario
         run: |
-          mkdir -p ${GITHUB_WORKSPACE}/molecule/default
+          mkdir -p "${GITHUB_WORKSPACE}/molecule/default"
           rsync -avzh --ignore-existing --ignore-errors \
             git_molecule/scenarios/ec2/ \
-            ${GITHUB_WORKSPACE}/molecule/default/
+            "${GITHUB_WORKSPACE}/molecule/default/"
 
       - name: Configure integration test variables
         run: |
-          rsync -aP git_infra/group_vars ${GITHUB_WORKSPACE}/molecule/default/
+          rsync -aP git_infra/group_vars "${GITHUB_WORKSPACE}/molecule/default/"
 
       - name: Resolve EC2 image and subnet
         env:
@@ -528,7 +532,7 @@ jobs:
             echo "EC2_IMAGE_OWNER=$owner"
             echo "EC2_IMAGE_NAME=$name"
             echo "EC2_SUBNET_ID=$subnet"
-          } >> $GITHUB_ENV
+          } >> "$GITHUB_ENV"
           echo "image: $owner/$name ($arch), subnet: $subnet"
 
       - name: Setup debugging session
@@ -540,8 +544,10 @@ jobs:
           install-dependencies: false
 
       - name: Run Molecule integration tests
-        # word splitting of MOLECULE_ARGS is intended (multiple molecule CLI arguments)
-        run: molecule test $MOLECULE_ARGS
+        run: |
+          # word splitting on purpose: args is one string of molecule options
+          # shellcheck disable=SC2086
+          molecule test $MOLECULE_ARGS
         env:
           MOLECULE_ARGS: ${{ inputs.args }}
           ANSIBLE_FORCE_COLOR: '1'
@@ -559,9 +565,9 @@ jobs:
         if: always()
         shell: bash
         run: |
-          cd ${GITHUB_WORKSPACE}
+          cd "${GITHUB_WORKSPACE}"
           shopt -s dotglob
-          rm -rf *
+          rm -rf ./*
 
   molecule-integration-ubuntu:
     runs-on: molecule
@@ -584,9 +590,9 @@ jobs:
         run: |
           {
             echo "CI_HOSTNAME=$(echo '${{ env.MOLECULE_DISTRO }}' | tr -dc '[:alnum:]\n\r' | tr '[:upper:]' '[:lower:]')"
-            echo "CI_PROJECT_NAME_MOLECULE=$(echo ${GITHUB_REPOSITORY#*/} | tr '_' '-')"
+            echo "CI_PROJECT_NAME_MOLECULE=$(echo "${GITHUB_REPOSITORY#*/}" | tr '_' '-')"
             echo "CI_PROJECT_DIR=$GITHUB_WORKSPACE"
-          } >> $GITHUB_ENV
+          } >> "$GITHUB_ENV"
 
       - name: Configure SSH
         env:
@@ -634,14 +640,14 @@ jobs:
 
       - name: Setup molecule scenario
         run: |
-          mkdir -p ${GITHUB_WORKSPACE}/molecule/default
+          mkdir -p "${GITHUB_WORKSPACE}/molecule/default"
           rsync -avzh --ignore-existing --ignore-errors \
             git_molecule/scenarios/ec2/ \
-            ${GITHUB_WORKSPACE}/molecule/default/
+            "${GITHUB_WORKSPACE}/molecule/default/"
 
       - name: Configure integration test variables
         run: |
-          rsync -aP git_infra/group_vars ${GITHUB_WORKSPACE}/molecule/default/
+          rsync -aP git_infra/group_vars "${GITHUB_WORKSPACE}/molecule/default/"
 
       - name: Resolve EC2 image and subnet
         env:
@@ -662,7 +668,7 @@ jobs:
             echo "EC2_IMAGE_OWNER=$owner"
             echo "EC2_IMAGE_NAME=$name"
             echo "EC2_SUBNET_ID=$subnet"
-          } >> $GITHUB_ENV
+          } >> "$GITHUB_ENV"
           echo "image: $owner/$name ($arch), subnet: $subnet"
 
       - name: Setup debugging session
@@ -674,8 +680,10 @@ jobs:
           install-dependencies: false
 
       - name: Run Molecule integration tests
-        # word splitting of MOLECULE_ARGS is intended (multiple molecule CLI arguments)
-        run: molecule test $MOLECULE_ARGS
+        run: |
+          # word splitting on purpose: args is one string of molecule options
+          # shellcheck disable=SC2086
+          molecule test $MOLECULE_ARGS
         env:
           MOLECULE_ARGS: ${{ inputs.args }}
           ANSIBLE_FORCE_COLOR: '1'
@@ -693,9 +701,9 @@ jobs:
         if: always()
         shell: bash
         run: |
-          cd ${GITHUB_WORKSPACE}
+          cd "${GITHUB_WORKSPACE}"
           shopt -s dotglob
-          rm -rf *
+          rm -rf ./*
 
   # Runs after all test jobs, also after failures and cancellations: terminates leftover instances
   # of this repo and, as a safety net, any molecule instance older than 3 hours

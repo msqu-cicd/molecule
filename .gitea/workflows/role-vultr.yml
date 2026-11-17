@@ -214,9 +214,9 @@ jobs:
         if: always()
         shell: bash
         run: |
-          cd ${GITHUB_WORKSPACE}
+          cd "${GITHUB_WORKSPACE}"
           shopt -s dotglob
-          rm -rf *
+          rm -rf ./*
 
   molecule-integration:
     runs-on: molecule
@@ -238,9 +238,9 @@ jobs:
         run: |
           {
             echo "CI_HOSTNAME=$(echo '${{ env.MOLECULE_DISTRO }}' | tr -dc '[:alnum:]\n\r' | tr '[:upper:]' '[:lower:]')"
-            echo "CI_PROJECT_NAME_MOLECULE=$(echo ${GITHUB_REPOSITORY#*/} | tr '_' '-')"
+            echo "CI_PROJECT_NAME_MOLECULE=$(echo "${GITHUB_REPOSITORY#*/}" | tr '_' '-')"
             echo "CI_PROJECT_DIR=$GITHUB_WORKSPACE"
-          } >> $GITHUB_ENV
+          } >> "$GITHUB_ENV"
 
       - name: Configure SSH
         env:
@@ -288,14 +288,14 @@ jobs:
 
       - name: Setup molecule scenario
         run: |
-          mkdir -p ${GITHUB_WORKSPACE}/molecule/default
+          mkdir -p "${GITHUB_WORKSPACE}/molecule/default"
           rsync -avzh --ignore-existing --ignore-errors \
             git_molecule/scenarios/vultr/ \
-            ${GITHUB_WORKSPACE}/molecule/default/
+            "${GITHUB_WORKSPACE}/molecule/default/"
 
       - name: Configure integration test variables
         run: |
-          rsync -aP git_infra/group_vars ${GITHUB_WORKSPACE}/molecule/default/
+          rsync -aP git_infra/group_vars "${GITHUB_WORKSPACE}/molecule/default/"
 
       - name: Setup debugging session
         if: inputs.molecule_debug == 'true'
@@ -306,8 +306,10 @@ jobs:
           install-dependencies: false
 
       - name: Run Molecule integration tests
-        # word splitting of MOLECULE_ARGS is intended (multiple molecule CLI arguments)
-        run: molecule test $MOLECULE_ARGS
+        run: |
+          # word splitting on purpose: args is one string of molecule options
+          # shellcheck disable=SC2086
+          molecule test $MOLECULE_ARGS
         env:
           MOLECULE_ARGS: ${{ inputs.args }}
           ANSIBLE_FORCE_COLOR: '1'
@@ -324,9 +326,9 @@ jobs:
         if: always()
         shell: bash
         run: |
-          cd ${GITHUB_WORKSPACE}
+          cd "${GITHUB_WORKSPACE}"
           shopt -s dotglob
-          rm -rf *
+          rm -rf ./*
 
   # Runs after all test jobs, also after failures and cancellations: deletes leftover servers
   # (and, via the role's cleanup.yml, their DNS records) instead of leaving them stopped.
@@ -349,9 +351,9 @@ jobs:
         run: |
           {
             echo "CI_HOSTNAME=$(echo '${{ env.MOLECULE_DISTRO }}' | tr -dc '[:alnum:]\n\r' | tr '[:upper:]' '[:lower:]')"
-            echo "CI_PROJECT_NAME_MOLECULE=$(echo ${GITHUB_REPOSITORY#*/} | tr '_' '-')"
+            echo "CI_PROJECT_NAME_MOLECULE=$(echo "${GITHUB_REPOSITORY#*/}" | tr '_' '-')"
             echo "CI_PROJECT_DIR=$GITHUB_WORKSPACE"
-          } >> $GITHUB_ENV
+          } >> "$GITHUB_ENV"
 
       - name: Configure SSH
         env:
@@ -388,10 +390,10 @@ jobs:
 
       - name: Setup molecule scenario
         run: |
-          mkdir -p ${GITHUB_WORKSPACE}/molecule/default
+          mkdir -p "${GITHUB_WORKSPACE}/molecule/default"
           rsync -avzh --ignore-existing --ignore-errors \
             git_molecule/scenarios/vultr/ \
-            ${GITHUB_WORKSPACE}/molecule/default/
+            "${GITHUB_WORKSPACE}/molecule/default/"
 
       - name: Destroy leftover molecule resources
         continue-on-error: true
@@ -408,11 +410,11 @@ jobs:
           echo "Checking for orphaned Vultr resources..."
           # Fail loudly if the API cannot be queried instead of reporting "nothing found"
           ALL_INSTANCES=$(vultr-cli instance list --output json)
-          INSTANCE_LIST=$(echo "$ALL_INSTANCES" | jq -r '.instances[]? | select(.label == "molecule-'${CI_PROJECT_NAME_MOLECULE}'") | .id')
+          INSTANCE_LIST=$(echo "$ALL_INSTANCES" | jq -r --arg label "molecule-${CI_PROJECT_NAME_MOLECULE}" '.instances[]? | select(.label == $label) | .id')
           if [ -n "$INSTANCE_LIST" ]; then
             echo "Found orphaned instances:"
             echo "$INSTANCE_LIST"
-            echo "$INSTANCE_LIST" | while read instance_id; do
+            echo "$INSTANCE_LIST" | while read -r instance_id; do
               echo "Deleting instance: $instance_id"
               vultr-cli instance delete "$instance_id" || echo "Failed to delete $instance_id"
             done
@@ -424,6 +426,6 @@ jobs:
         if: always()
         shell: bash
         run: |
-          cd ${GITHUB_WORKSPACE}
+          cd "${GITHUB_WORKSPACE}"
           shopt -s dotglob
-          rm -rf *
+          rm -rf ./*
