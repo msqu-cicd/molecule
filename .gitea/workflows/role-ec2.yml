@@ -143,6 +143,8 @@ jobs:
       # not valid shell before rendering and are left to the AI review.
       - name: Shell Lint
         run: |
+          # without pipefail a failing git ls-files would pass the step with nothing checked
+          set -o pipefail
           git ls-files -z |
             while IFS= read -r -d '' f; do
               case ${f##*/} in
