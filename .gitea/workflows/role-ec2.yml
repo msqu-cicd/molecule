@@ -279,7 +279,6 @@ jobs:
           install-dependencies: false
 
       - name: Run Molecule unit tests
-        # word splitting of MOLECULE_ARGS is intended (multiple molecule CLI arguments)
         run: |
           # word splitting on purpose: args is one string of molecule options
           # shellcheck disable=SC2086
@@ -409,7 +408,6 @@ jobs:
           install-dependencies: false
 
       - name: Run Molecule unit tests
-        # word splitting of MOLECULE_ARGS is intended (multiple molecule CLI arguments)
         run: |
           # word splitting on purpose: args is one string of molecule options
           # shellcheck disable=SC2086
@@ -546,7 +544,6 @@ jobs:
           install-dependencies: false
 
       - name: Run Molecule integration tests
-        # word splitting of MOLECULE_ARGS is intended (multiple molecule CLI arguments)
         run: |
           # word splitting on purpose: args is one string of molecule options
           # shellcheck disable=SC2086
@@ -683,7 +680,6 @@ jobs:
           install-dependencies: false
 
       - name: Run Molecule integration tests
-        # word splitting of MOLECULE_ARGS is intended (multiple molecule CLI arguments)
         run: |
           # word splitting on purpose: args is one string of molecule options
           # shellcheck disable=SC2086

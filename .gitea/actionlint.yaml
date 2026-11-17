@@ -1,6 +1,6 @@
 ---
 # actionlint configuration for Gitea Actions; CI runs
-#   actionlint -config-file .gitea/actionlint.yaml .gitea/workflows/*.yml examples/*.yml
+#   actionlint -config-file .gitea/actionlint.yaml .gitea/workflows/*.yml examples/caller-molecule.yml
 self-hosted-runner:
   # labels of the git.msqu.de runners
   labels:
