@@ -107,7 +107,7 @@ jobs:
   lint:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:752124ba4ccf362bc46ffa2f6921f89446233aa3907196933f7e551be1fd5526
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:87b922e8ba1b7f1dd15338d5b62cde9a7be689729ae1e7c798aa7b8191a7a4ec
     needs: changes
     if: needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true'
     steps:
@@ -120,12 +120,49 @@ jobs:
       - name: Yaml Lint
         run: yamllint -f colored .
 
+      # Tracked *.sh/*.bash files and extensionless files with a sh/bash shebang; git ls-files keeps
+      # out what ansible-lint installs into the checkout (.ansible/, .cache/). Templates (*.sh.j2) are
+      # not valid shell before rendering and are left to the AI review.
+      - name: Shell Lint
+        run: |
+          # without pipefail a failing git ls-files would pass the step with nothing checked
+          set -o pipefail
+          git ls-files -z |
+            while IFS= read -r -d '' f; do
+              case ${f##*/} in
+                *.sh | *.bash) printf '%s\0' "$f" ;;
+                *.*) ;;
+                *) if head -n 1 "$f" | grep -qE '^#! ?/(usr/)?bin/(env +)?(ba)?sh([[:space:]]|$)'; then printf '%s\0' "$f"; fi ;;
+              esac
+            done | xargs -0 -r shellcheck
+
+  # Independent of the changes job: every pull request, whatever it changed, and every push the
+  # caller's paths-ignore lets through. A secret in a path changes ignores (README, .gitea/**)
+  # counts too. The scanner's built-in rules only: a .gitleaks.toml, .gitleaksignore or inline
+  # gitleaks:allow in the change cannot switch the scan off. --redact keeps findings out of the log.
+  secret-scan:
+    runs-on: molecule
+    container:
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:87b922e8ba1b7f1dd15338d5b62cde9a7be689729ae1e7c798aa7b8191a7a4ec
+    steps:
+      - name: Checkout repository
+        uses: https://github.com/actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Gitleaks
+        run: |
+          config=$(mktemp)
+          printf '[extend]\nuseDefault = true\n' > "$config"
+          rm -f .gitleaksignore
+          gitleaks dir . --config "$config" --ignore-gitleaks-allow --redact --no-banner
+
   # The role's argument specs and asserts against the real infra inventories: every host an infra
   # playbook applies the role to, local connection, no test server (scripts/infra-spec-check.py).
   infra-spec:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:752124ba4ccf362bc46ffa2f6921f89446233aa3907196933f7e551be1fd5526
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:87b922e8ba1b7f1dd15338d5b62cde9a7be689729ae1e7c798aa7b8191a7a4ec
     needs: [changes, lint]
     if: needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true'
     steps:
@@ -184,7 +221,7 @@ jobs:
   molecule-integration:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:752124ba4ccf362bc46ffa2f6921f89446233aa3907196933f7e551be1fd5526
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:87b922e8ba1b7f1dd15338d5b62cde9a7be689729ae1e7c798aa7b8191a7a4ec
     needs: [changes, lint]
     if: (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true')
     env:
@@ -297,7 +334,7 @@ jobs:
   molecule-cleanup:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:752124ba4ccf362bc46ffa2f6921f89446233aa3907196933f7e551be1fd5526
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:87b922e8ba1b7f1dd15338d5b62cde9a7be689729ae1e7c798aa7b8191a7a4ec
     if: always() && (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true')
     needs: [changes, molecule-integration]
     env:
