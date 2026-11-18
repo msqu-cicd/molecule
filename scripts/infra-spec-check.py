@@ -108,7 +108,17 @@ def as_list(when):
     return when if isinstance(when, list) else [when]
 
 
-def runtime_names(infra_dir, tasks, depth=0):
+def import_path(task, key, infra_dir, base_dir):
+    """The task file an import/include task names: next to the including file first, as Ansible looks, then in infra."""
+    ref = task.get(key)
+    ref = ref.get("file") if isinstance(ref, dict) else ref
+    if not infra_dir or not isinstance(ref, str) or "{{" in ref:
+        return ref, ""
+    near = os.path.join(base_dir or infra_dir, ref)
+    return ref, near if os.path.isfile(near) else os.path.join(infra_dir, ref)
+
+
+def runtime_names(infra_dir, tasks, depth=0, base_dir=None):
     """Variables that tasks set at runtime: set_fact keys and register names, also in imported files."""
     names = set()
     for task in tasks or []:
@@ -120,13 +130,11 @@ def runtime_names(infra_dir, tasks, depth=0):
             if isinstance(task.get(key), dict):
                 names.update(k for k in task[key] if k != "cacheable")
         for key in ("block", "rescue", "always"):
-            names |= runtime_names(infra_dir, task.get(key), depth)
+            names |= runtime_names(infra_dir, task.get(key), depth, base_dir)
         for key in IMPORT_KEYS:
-            ref = task.get(key)
-            ref = ref.get("file") if isinstance(ref, dict) else ref
-            path = os.path.join(infra_dir, ref) if isinstance(ref, str) and "{{" not in ref else ""
+            ref, path = import_path(task, key, infra_dir, base_dir)
             if depth < 3 and os.path.isfile(path):
-                names |= runtime_names(infra_dir, load_yaml(path), depth + 1)
+                names |= runtime_names(infra_dir, load_yaml(path), depth + 1, os.path.dirname(path))
             elif depth < 3 and path:
                 # e.g. outside the workflow's sparse checkout: its set_fact/register names stay unknown
                 print(f"WARNING {ref}: imported task file not found in {infra_dir}, its runtime variables are not known")
@@ -141,7 +149,7 @@ def same_role(ref, name):
     return name in {ref, last, ref.replace("-", "_"), last.replace("-", "_")}
 
 
-def walk_tasks(tasks, inherited=(), infra_dir=None, depth=0):
+def walk_tasks(tasks, inherited=(), infra_dir=None, depth=0, base_dir=None):
     """Every task with the when clauses of its enclosing blocks plus its own, imported task files followed."""
     for task in tasks or []:
         if not isinstance(task, dict):
@@ -149,14 +157,12 @@ def walk_tasks(tasks, inherited=(), infra_dir=None, depth=0):
         when = [*inherited, *as_list(task.get("when"))]
         if any(k in task for k in ("block", "rescue", "always")):
             for key in ("block", "rescue", "always"):
-                yield from walk_tasks(task.get(key), when, infra_dir, depth)
+                yield from walk_tasks(task.get(key), when, infra_dir, depth, base_dir)
             continue
         for key in IMPORT_KEYS:
-            ref = task.get(key)
-            ref = ref.get("file") if isinstance(ref, dict) else ref
-            path = os.path.join(infra_dir, ref) if infra_dir and isinstance(ref, str) and "{{" not in ref else ""
+            _, path = import_path(task, key, infra_dir, base_dir)
             if depth < 3 and os.path.isfile(path):
-                yield from walk_tasks(load_yaml(path), when, infra_dir, depth + 1)
+                yield from walk_tasks(load_yaml(path), when, infra_dir, depth + 1, os.path.dirname(path))
         yield task, when
 
 
@@ -174,25 +180,37 @@ def entry_conditions(infra_dir, name):
             continue
         if not isinstance(plays, list):
             continue
-        for play in plays:
-            if not isinstance(play, dict) or "hosts" not in play:
-                continue
-            runtime = derived.union(*(runtime_names(infra_dir, play.get(sec)) for sec in ("pre_tasks", "tasks", "post_tasks")))
-            hosts = play["hosts"]
-            if isinstance(hosts, list):
-                hosts = ":".join(str(h) for h in hosts)
-            hosts = hosts if isinstance(hosts, str) and "{{" not in hosts else "all"
-            for item in play.get("roles") or []:
-                rname = (item.get("role") or item.get("name")) if isinstance(item, dict) else item
-                if same_role(rname, name):
-                    entries.append((fname, as_list(item.get("when") if isinstance(item, dict) else None), runtime, hosts))
-            for section in ("pre_tasks", "tasks", "post_tasks"):
-                for task, when in walk_tasks(play.get(section), (), infra_dir):
-                    for key in ("ansible.builtin.include_role", "ansible.builtin.import_role", "include_role", "import_role"):
-                        args = task.get(key)
-                        if isinstance(args, dict) and same_role(args.get("name"), name):
-                            entries.append((fname, when, runtime, hosts))
+        try:
+            entries += play_entries(infra_dir, name, fname, plays, derived)
+        except yaml.YAMLError as exc:
+            mark = getattr(exc, "problem_mark", None)
+            where = os.path.relpath(mark.name, infra_dir) + ": " if mark and mark.name else ""
+            broken.append((fname, where + str(getattr(exc, "problem", None) or "YAML error")))
     return entries, broken
+
+
+def play_entries(infra_dir, name, fname, plays, derived):
+    """The entries of one playbook; an imported task file that does not parse raises yaml.YAMLError."""
+    entries = []
+    for play in plays:
+        if not isinstance(play, dict) or "hosts" not in play:
+            continue
+        runtime = derived.union(*(runtime_names(infra_dir, play.get(sec)) for sec in ("pre_tasks", "tasks", "post_tasks")))
+        hosts = play["hosts"]
+        if isinstance(hosts, list):
+            hosts = ":".join(str(h) for h in hosts)
+        hosts = hosts if isinstance(hosts, str) and "{{" not in hosts else "all"
+        for item in play.get("roles") or []:
+            rname = (item.get("role") or item.get("name")) if isinstance(item, dict) else item
+            if same_role(rname, name):
+                entries.append((fname, as_list(item.get("when") if isinstance(item, dict) else None), runtime, hosts))
+        for section in ("pre_tasks", "tasks", "post_tasks"):
+            for task, when in walk_tasks(play.get(section), (), infra_dir):
+                for key in ("ansible.builtin.include_role", "ansible.builtin.import_role", "include_role", "import_role"):
+                    args = task.get(key)
+                    if isinstance(args, dict) and same_role(args.get("name"), name):
+                        entries.append((fname, when, runtime, hosts))
+    return entries
 
 
 def condition(entries):

@@ -20,9 +20,11 @@ FILES = {
 }
 
 
-@unittest.skipUnless(shutil.which("ansible-playbook"), "ansible-playbook not on PATH")
+# In CI a missing ansible-playbook fails the tests instead of skipping them all
+@unittest.skipUnless(shutil.which("ansible-playbook") or os.environ.get("CI"), "ansible-playbook not on PATH")
 class InfraSpecCheck(unittest.TestCase):
     def setUp(self):
+        self.assertTrue(shutil.which("ansible-playbook"), "ansible-playbook not on PATH")
         self.tmp = tempfile.TemporaryDirectory(prefix="infra-spec-test-")
         self.addCleanup(self.tmp.cleanup)
         self.root = os.path.join(self.tmp.name, "demo_role")
@@ -61,7 +63,7 @@ class InfraSpecCheck(unittest.TestCase):
     def test_empty_inventory_fails(self):
         rc, out = self.run_check({"site.yml": SITE, "inventories/a.yml": GOOD, "inventories/b.yml": "all:\n  hosts: {}\n"})
         self.assertEqual(rc, 1, out)
-        self.assertIn("b.yml", out)
+        self.assertRegex(out, r"FAIL b\.yml -: inventory: no hosts")
 
     def test_playbook_with_yaml_error_fails(self):
         rc, out = self.run_check({"site.yml": SITE, "broken.yml": "- hosts: all\n  roles: [unclosed\n", "inventories/a.yml": GOOD})
@@ -86,6 +88,21 @@ class InfraSpecCheck(unittest.TestCase):
         task_file = "- ansible.builtin.include_role:\n    name: demo_role\n"
         rc, out = self.run_check({"site.yml": site, "tasks/demo.yml": task_file, "inventories/a.yml": BAD})
         self.assertEqual(rc, 0, out)
+
+    def test_nested_import_relative_to_the_including_file(self):
+        site = "- hosts: all\n  tasks:\n    - ansible.builtin.import_tasks: tasks/outer.yml\n"
+        outer = "- ansible.builtin.import_tasks: inner.yml\n"
+        inner = "- ansible.builtin.include_role:\n    name: demo_role\n"
+        rc, out = self.run_check({"site.yml": site, "tasks/outer.yml": outer, "tasks/inner.yml": inner, "inventories/a.yml": BAD})
+        self.assertEqual(rc, 1, out)
+        self.assertIn("applied by site.yml", out)
+
+    def test_imported_task_file_with_yaml_error_fails(self):
+        site = SITE + "- hosts: all\n  tasks:\n    - ansible.builtin.import_tasks: tasks/broken.yml\n"
+        rc, out = self.run_check({"site.yml": site, "tasks/broken.yml": "- name: [unclosed\n", "inventories/a.yml": GOOD})
+        self.assertEqual(rc, 1, out)
+        self.assertIn("site.yml: playbook does not parse", out)
+        self.assertNotIn("Traceback", out)
 
 
 if __name__ == "__main__":
