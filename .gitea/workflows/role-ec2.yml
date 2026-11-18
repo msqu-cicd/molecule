@@ -122,7 +122,7 @@ jobs:
   lint:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:168e5e830a9eb97d40f4ee4ef6dc7a07c224e601989e80b398a9eb1a78a90d93
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:bcca5b3c1f392bf7d796dd097cdc89c84f69f335cb2af30eae068aae578fd421
     needs: changes
     if: needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true'
     steps:
@@ -158,7 +158,7 @@ jobs:
   secret-scan:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:168e5e830a9eb97d40f4ee4ef6dc7a07c224e601989e80b398a9eb1a78a90d93
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:bcca5b3c1f392bf7d796dd097cdc89c84f69f335cb2af30eae068aae578fd421
     steps:
       # A pull request is scanned commit by commit, so a secret added and removed again inside it is
       # found (full history, so the base commit resolves); a push or dispatch scans the checked-out tree.
@@ -192,7 +192,7 @@ jobs:
   infra-spec:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:168e5e830a9eb97d40f4ee4ef6dc7a07c224e601989e80b398a9eb1a78a90d93
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:bcca5b3c1f392bf7d796dd097cdc89c84f69f335cb2af30eae068aae578fd421
     needs: [changes, lint]
     if: needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true'
     steps:
@@ -251,7 +251,7 @@ jobs:
   molecule-unit-debian:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:168e5e830a9eb97d40f4ee4ef6dc7a07c224e601989e80b398a9eb1a78a90d93
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:bcca5b3c1f392bf7d796dd097cdc89c84f69f335cb2af30eae068aae578fd421
     needs: [changes, lint]
     if: (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && inputs.unit == 'true' && github.event_name != 'push'
     env:
@@ -381,7 +381,7 @@ jobs:
   molecule-integration-debian:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:168e5e830a9eb97d40f4ee4ef6dc7a07c224e601989e80b398a9eb1a78a90d93
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:bcca5b3c1f392bf7d796dd097cdc89c84f69f335cb2af30eae068aae578fd421
     needs: [changes, lint, molecule-unit-debian]
     if: always() && github.event_name != 'push' && (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && inputs.integration == 'true' && needs.lint.result == 'success' && (needs.molecule-unit-debian.result == 'success' || inputs.unit != 'true')
     env:
@@ -523,7 +523,7 @@ jobs:
   molecule-cleanup:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:168e5e830a9eb97d40f4ee4ef6dc7a07c224e601989e80b398a9eb1a78a90d93
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:bcca5b3c1f392bf7d796dd097cdc89c84f69f335cb2af30eae068aae578fd421
     if: always() && github.event_name != 'push' && (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && (inputs.unit == 'true' || inputs.integration == 'true')
     needs: [changes, molecule-unit-debian, molecule-integration-debian]
     steps:
