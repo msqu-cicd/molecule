@@ -44,20 +44,49 @@
 
         - name: Register the SSH key facts
           ansible.builtin.set_fact:
-            existing_ssh_key_name: "molecule"
-            generated_public_ssh_key: "{{ lookup('ansible.builtin.file', ssh_id_path + '.pub') }}"
+            generated_public_ssh_key: "{{ lookup('ansible.builtin.file', ssh_id_path + '.pub') | trim }}"
 
-        - name: Register SSH key for test instance(s)
-          hetzner.hcloud.ssh_key:
-            name: "{{ existing_ssh_key_name }}"
-            public_key: "{{ generated_public_ssh_key }}"
-            api_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
-            state: present
-          register: molecule_ssh_key
-          # The same key may already be registered under another name; anything else is a real error
-          failed_when:
-            - molecule_ssh_key is failed
-            - "'already' not in (molecule_ssh_key.msg | default(''))"
+        # The same key may already be registered under another name, and Hetzner
+        # accepts a public key once per project: use that name instead of creating
+        # the key as "molecule"
+        - name: Look for the key in the project
+          hetzner.hcloud.ssh_key_info:
+            api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_TOKEN') }}"
+          register: hcloud_ssh_keys
+
+        # A concurrent job may register the same key first: look again, and fail if the key is still missing
+        - name: Register the key when it is missing
+          when: hcloud_ssh_keys.hcloud_ssh_key_info | selectattr('public_key', 'contains', generated_public_ssh_key.split()[1]) | list | length == 0
+          block:
+            - name: Register SSH key for test instance(s)
+              hetzner.hcloud.ssh_key:
+                name: molecule
+                public_key: "{{ generated_public_ssh_key }}"
+                api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_TOKEN') }}"
+                state: present
+          rescue:
+            - name: Registering the key failed, looking for it again
+              ansible.builtin.debug:
+                msg: "{{ ansible_failed_result.msg | default('no message') }}"
+
+        - name: Read the keys again
+          hetzner.hcloud.ssh_key_info:
+            api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_TOKEN') }}"
+          register: hcloud_ssh_keys
+
+        - name: Register the name of the key
+          ansible.builtin.set_fact:
+            existing_ssh_key_name: >-
+              {{ hcloud_ssh_keys.hcloud_ssh_key_info
+                 | selectattr('public_key', 'contains', generated_public_ssh_key.split()[1])
+                 | map(attribute='name') | first | default('') }}
+
+        - name: Check that the key is registered
+          ansible.builtin.assert:
+            that:
+              - existing_ssh_key_name | length > 0
+            fail_msg: "{{ ssh_id_path }}.pub is not registered in the Hetzner project and registering it failed"
+            quiet: true
 
     - name: Create new SSH key
       when: not id_ed25519_stat.stat.exists
