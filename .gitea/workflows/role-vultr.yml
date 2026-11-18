@@ -267,6 +267,7 @@ jobs:
           token: '${{ secrets.CI_RUNNER_PAT }}'
           path: git_infra
           ref: main
+          persist-credentials: false
           sparse-checkout: |
             group_vars/
 
@@ -278,13 +279,16 @@ jobs:
           token: '${{ secrets.CI_RUNNER_PAT }}'
           path: git_molecule
           ref: ${{ inputs.molecule_ref }}
+          persist-credentials: false
           sparse-checkout: |
             scenarios/vultr
 
       - name: Prepare Ansible Vault
         env:
           ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
-        run: printf '%s\n' "$ANSIBLE_VAULT_PASSWORD" > "$GITHUB_WORKSPACE/.vault"
+        run: |
+          umask 077
+          printf '%s\n' "$ANSIBLE_VAULT_PASSWORD" > "$GITHUB_WORKSPACE/.vault"
 
       - name: Setup molecule scenario
         run: |
@@ -320,7 +324,6 @@ jobs:
           MOLECULE_DEBUG: ${{ inputs.molecule_debug }}
           PY_COLORS: '1'
           VULTR_API_KEY: ${{ secrets.VULTR_API_KEY }}
-          ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
 
       - name: Cleanup workspace
         if: always()
@@ -380,13 +383,16 @@ jobs:
           token: '${{ secrets.CI_RUNNER_PAT }}'
           path: git_molecule
           ref: ${{ inputs.molecule_ref }}
+          persist-credentials: false
           sparse-checkout: |
             scenarios/vultr
 
       - name: Prepare Ansible Vault
         env:
           ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
-        run: printf '%s\n' "$ANSIBLE_VAULT_PASSWORD" > "$GITHUB_WORKSPACE/.vault"
+        run: |
+          umask 077
+          printf '%s\n' "$ANSIBLE_VAULT_PASSWORD" > "$GITHUB_WORKSPACE/.vault"
 
       - name: Setup molecule scenario
         run: |
@@ -400,7 +406,6 @@ jobs:
         run: molecule destroy || echo "Cleanup failed or no resources to destroy"
         env:
           VULTR_API_KEY: ${{ secrets.VULTR_API_KEY }}
-          ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
 
       - name: Cleanup orphaned Vultr resources
         continue-on-error: true
