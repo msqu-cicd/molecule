@@ -474,8 +474,8 @@ jobs:
     runs-on: molecule
     container:
       image: ghcr.io/msqu-devops/molecule:runner@sha256:48a43e05780540f368aa82b3a57218d59b73ea042a21eeb967837a49e9c20da6
-    if: always() && github.event_name != 'push' && (inputs.unit == 'true' || inputs.integration == 'true')
-    needs: [molecule-unit-debian, molecule-integration-debian]
+    if: always() && github.event_name != 'push' && (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && (inputs.unit == 'true' || inputs.integration == 'true')
+    needs: [changes, molecule-unit-debian, molecule-integration-debian]
     env:
       MOLECULE_SCENARIO_NAME: hetznercloud
       MOLECULE_DISTRO: ${{ inputs.debian_distro }}

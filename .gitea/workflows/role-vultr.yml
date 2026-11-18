@@ -238,7 +238,7 @@ jobs:
     container:
       image: ghcr.io/msqu-devops/molecule:runner@sha256:48a43e05780540f368aa82b3a57218d59b73ea042a21eeb967837a49e9c20da6
     needs: [changes, lint]
-    if: (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true')
+    if: (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && github.event_name != 'push'
     env:
       TEST_TYPE: integration
       VULTR_SERVER_STATE: present
@@ -350,12 +350,12 @@ jobs:
 
   # Runs after all test jobs, also after failures and cancellations: deletes leftover servers
   # (and, via the role's cleanup.yml, their DNS records) instead of leaving them stopped.
-  # Skips with the tests (nothing relevant changed, or a push its pull request already tested).
+  # Skips with the tests: nothing relevant changed, or a push (pushes start no instance).
   molecule-cleanup:
     runs-on: molecule
     container:
       image: ghcr.io/msqu-devops/molecule:runner@sha256:48a43e05780540f368aa82b3a57218d59b73ea042a21eeb967837a49e9c20da6
-    if: always() && (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true')
+    if: always() && github.event_name != 'push' && (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true')
     needs: [changes, molecule-integration]
     env:
       MOLECULE_SCENARIO_NAME: vultr
