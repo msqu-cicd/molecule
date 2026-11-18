@@ -58,10 +58,14 @@
           retries: 300
           with_items: "{{ server_destroy.results }}"
 
+    # Independent of the servers: a create that failed before or after the servers existed
+    # leaves volumes and networks behind, and deleting them is a no-op when they are missing
+    - name: Destroy Hcloud volumes and networks
+      when: hetzner_server_state == 'absent'
+      block:
         - name: Destroy volume(s)
           hetzner.hcloud.volume:
             name: "{{ item.1.name | default(item.0.name) }}"
-            server: "{{ item.0.name }}"
             api_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
             state: absent
           register: volumes
@@ -79,7 +83,9 @@
           with_items: "{{ volumes.results }}"
 
         - name: Destroy network(s)
-          when: ansible_loop.first
+          when:
+            - ansible_loop.first
+            - item.network is defined
           hetzner.hcloud.network:
             name: "{{ item.network[0].name }}"
             api_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
