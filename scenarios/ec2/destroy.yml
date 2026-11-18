@@ -127,7 +127,7 @@
           amazon.aws.ec2_instance:
             profile: "{{ item.aws_profile | default(omit) }}"
             region: "{{ item.region | default(omit) }}"
-            instance_ids: "{{ instance_config | map(attribute='instance_ids') | flatten }}"
+            instance_ids: "{{ instance_config | selectattr('instance', 'equalto', item.name) | map(attribute='instance_ids') | flatten }}"
             state: absent
           loop: "{{ platforms }}"
           loop_control:
