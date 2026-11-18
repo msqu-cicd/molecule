@@ -6,7 +6,7 @@ driver:
 platforms:
   - name: molecule-${CI_PROJECT_NAME_MOLECULE}
     os: "${MOLECULE_DISTRO}"
-    plan: ${INSTANCE_SIZE:-vc2-1c-1gb}
+    plan: ${INSTANCE_SIZE:-vhp-1c-1gb-amd}
     region: ${INSTANCE_REGION:-fra}
     groups:
       - master
