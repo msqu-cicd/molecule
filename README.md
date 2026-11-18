@@ -245,7 +245,7 @@ MOLECULE_DISTRO=debian-13 KVM_IMAGE_CACHE=~/.cache/molecule-images molecule test
 ```
 
 `examples/Makefile` copies a scenario (`DRIVER`, default `kvm`; `MOLECULE_REF`, default `main`, a branch, tag or
-commit of this repository) into a role and runs molecule with the same environment as CI. `make shellcheck`
+full commit SHA of this repository) into a role and runs molecule with the same environment as CI. `make shellcheck`
 checks what CI's Shell Lint checks. It is the copy every role repository carries. `make converge` keeps the instance and its molecule
 state in `~/.cache/molecule-make/<repo>` (mode 0700) for `make verify`, `make login` and `make destroy`; `make test`
 and `make destroy` remove the state and the scenario files the Makefile copied in, also when molecule fails.
