@@ -10,6 +10,8 @@ MOLECULE_LINT_IMAGE := ghcr.io/msqu-devops/molecule:lint
 
 # Molecule settings
 MOLECULE_GIT_REPO := ssh://git@git.msqu.de:22222/CICD/molecule.git
+# branch, tag or commit of CICD/molecule to take the scenario from (CI: the molecule_ref input)
+MOLECULE_REF ?= main
 DRIVER ?= kvm
 MOLECULE_DISTRO ?= debian-13
 
@@ -54,7 +56,9 @@ export MOLECULE_EPHEMERAL_DIRECTORY := $(MOLECULE_CACHE_DIR)/.cache/
 	@mkdir -p $(CI_PROJECT_DIR)/molecule/default/
 	@install -d -m 0700 $(MOLECULE_CACHE_DIR)
 	@tmp=$$(mktemp -d /tmp/molecule-git.XXXXXXXX) && trap 'rm -rf "$$tmp"' EXIT && \
-		git clone --depth 1 --quiet $(MOLECULE_GIT_REPO) "$$tmp/molecule" && \
+		git init --quiet "$$tmp/molecule" && \
+		git -C "$$tmp/molecule" fetch --depth 1 --quiet $(MOLECULE_GIT_REPO) $(MOLECULE_REF) && \
+		git -C "$$tmp/molecule" checkout --quiet FETCH_HEAD && \
 		(cd "$$tmp/molecule/scenarios/$(DRIVER)" && find . -type f) | while IFS= read -r f; do \
 			[ -e "$(CI_PROJECT_DIR)/molecule/default/$$f" ] || echo "$${f#./}"; \
 		done >> "$(MOLECULE_COPIED_FILES)" && \
@@ -119,12 +123,12 @@ yamllint: ## Run yamllint on YAML files
 
 .PHONY: shellcheck
 shellcheck: ## Run shellcheck on shell scripts
-	@echo "Running shellcheck..."
+	@echo "Running shellcheck (tracked *.sh/*.bash files and extensionless sh/bash scripts, like CI)..."
 	@$(CONTAINER_RUNTIME) run --rm \
 		--pull=always \
 		-v $(CURDIR):/git:ro -w /git \
 		$(MOLECULE_LINT_IMAGE) \
-		sh -c 'find . -name .git -type d -prune -o -type f -name "*.sh" -print0 | xargs -0 -r -n1 shellcheck'
+		bash -c 'set -o pipefail; git -c safe.directory=/git ls-files -z | while IFS= read -r -d "" f; do case $${f##*/} in *.sh | *.bash) printf "%s\0" "$$f" ;; *.*) ;; *) if head -n 1 "$$f" | grep -qE "^#! ?/(usr/)?bin/(env +)?(ba)?sh([[:space:]]|\$$)"; then printf "%s\0" "$$f"; fi ;; esac; done | xargs -0 -r shellcheck'
 
 # ============================================================================
 # Utility Targets
@@ -164,6 +168,7 @@ vars: ## Show all important variables
 	@echo "Molecule Configuration:"
 	@echo "  DRIVER                  = $(DRIVER)"
 	@echo "  MOLECULE_DISTRO         = $(MOLECULE_DISTRO)"
+	@echo "  MOLECULE_REF            = $(MOLECULE_REF)"
 	@echo "  ANSIBLE_ROLES_PATH      = $(ANSIBLE_ROLES_PATH)"
 	@echo ""
 	@echo "Container:"
@@ -179,6 +184,7 @@ help: ## Show this help message
 	@echo "Examples:"
 	@echo "  make converge MOLECULE_DISTRO=debian-13"
 	@echo "  make test DRIVER=hetznercloud"
+	@echo "  make test MOLECULE_REF=my-scenario-branch"
 	@echo "  make print-CI_PROJECT_NAME"
 
 .DEFAULT_GOAL := help
