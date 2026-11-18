@@ -23,7 +23,8 @@ dependencies (none of the roles has any; import_role would need them on the role
 
 Failures print the host, the task and the assertion or type error, never variable values (the
 inventories hold secrets). Exit 1 on any failure, 0 otherwise, also when no playbook applies the
-role.
+role. An infra playbook that does not parse, an inventory that does not parse and a play on all
+hosts that finds none in an inventory count as failures: they would hide the role's real hosts.
 """
 import json
 import os
@@ -55,6 +56,7 @@ def main():
 if __name__ == "__main__":
     main()
 """
+IMPORT_KEYS = ("ansible.builtin.import_tasks", "ansible.builtin.include_tasks", "import_tasks", "include_tasks")
 QUOTED = re.compile(r"'[^']*'|\"[^\"]*\"")
 
 
@@ -119,7 +121,7 @@ def runtime_names(infra_dir, tasks, depth=0):
                 names.update(k for k in task[key] if k != "cacheable")
         for key in ("block", "rescue", "always"):
             names |= runtime_names(infra_dir, task.get(key), depth)
-        for key in ("ansible.builtin.import_tasks", "ansible.builtin.include_tasks", "import_tasks", "include_tasks"):
+        for key in IMPORT_KEYS:
             ref = task.get(key)
             ref = ref.get("file") if isinstance(ref, dict) else ref
             path = os.path.join(infra_dir, ref) if isinstance(ref, str) and "{{" not in ref else ""
@@ -139,29 +141,36 @@ def same_role(ref, name):
     return name in {ref, last, ref.replace("-", "_"), last.replace("-", "_")}
 
 
-def walk_tasks(tasks, inherited=()):
-    """Every task with the when clauses of its enclosing blocks plus its own."""
+def walk_tasks(tasks, inherited=(), infra_dir=None, depth=0):
+    """Every task with the when clauses of its enclosing blocks plus its own, imported task files followed."""
     for task in tasks or []:
         if not isinstance(task, dict):
             continue
         when = [*inherited, *as_list(task.get("when"))]
         if any(k in task for k in ("block", "rescue", "always")):
             for key in ("block", "rescue", "always"):
-                yield from walk_tasks(task.get(key), when)
-        else:
-            yield task, when
+                yield from walk_tasks(task.get(key), when, infra_dir, depth)
+            continue
+        for key in IMPORT_KEYS:
+            ref = task.get(key)
+            ref = ref.get("file") if isinstance(ref, dict) else ref
+            path = os.path.join(infra_dir, ref) if infra_dir and isinstance(ref, str) and "{{" not in ref else ""
+            if depth < 3 and os.path.isfile(path):
+                yield from walk_tasks(load_yaml(path), when, infra_dir, depth + 1)
+        yield task, when
 
 
 def entry_conditions(infra_dir, name):
-    """(playbook, when clauses, runtime names) per playbook entry that applies the role."""
+    """(playbook, when clauses, runtime names, hosts) per playbook entry that applies the role, and the playbooks that do not parse."""
     derived = fact_derived_vars(infra_dir)
-    entries = []
+    entries, broken = [], []
     for fname in sorted(os.listdir(infra_dir)):
         if not fname.endswith((".yml", ".yaml")):
             continue
         try:
             plays = load_yaml(os.path.join(infra_dir, fname))
-        except yaml.YAMLError:
+        except yaml.YAMLError as exc:
+            broken.append((fname, str(getattr(exc, "problem", None) or "YAML error")))
             continue
         if not isinstance(plays, list):
             continue
@@ -178,12 +187,12 @@ def entry_conditions(infra_dir, name):
                 if same_role(rname, name):
                     entries.append((fname, as_list(item.get("when") if isinstance(item, dict) else None), runtime, hosts))
             for section in ("pre_tasks", "tasks", "post_tasks"):
-                for task, when in walk_tasks(play.get(section)):
+                for task, when in walk_tasks(play.get(section), (), infra_dir):
                     for key in ("ansible.builtin.include_role", "ansible.builtin.import_role", "include_role", "import_role"):
                         args = task.get(key)
                         if isinstance(args, dict) and same_role(args.get("name"), name):
                             entries.append((fname, when, runtime, hosts))
-    return entries
+    return entries, broken
 
 
 def condition(entries):
@@ -257,11 +266,14 @@ def main():
         sys.exit(__doc__)
     role_dir, infra_dir = os.path.abspath(sys.argv[1]), os.path.abspath(sys.argv[2])
     name = role_name(role_dir, sys.argv[3] if len(sys.argv) > 3 else os.path.basename(role_dir))
-    entries = entry_conditions(infra_dir, name)
+    entries, broken = entry_conditions(infra_dir, name)
+    failed = [("-", fname, "playbook does not parse", problem) for fname, problem in broken]
     if not entries:
-        print(f"{name}: no infra playbook applies this role, nothing to check")
-        return 0
-    failed = []
+        for inv, host, task, reason in failed:
+            print(f"FAIL {inv} {host}: {task}: {reason}")
+        if not failed:
+            print(f"{name}: no infra playbook applies this role, nothing to check")
+        return 1 if failed else 0
     inv_dir = os.path.join(infra_dir, "inventories")
     inventories = sorted(i for i in os.listdir(inv_dir) if i.endswith((".yml", ".yaml", ".ini")))
     with tempfile.TemporaryDirectory(prefix="infra-spec-") as tmp:
@@ -274,7 +286,8 @@ def main():
             if os.path.isdir(os.path.join(infra_dir, sub)):
                 os.symlink(os.path.join(infra_dir, sub), os.path.join(tmp, sub))
         env = dict(os.environ, ANSIBLE_ROLES_PATH=os.path.join(tmp, "roles"), ANSIBLE_STDOUT_CALLBACK="default",
-                   ANSIBLE_CALLBACK_RESULT_FORMAT="json", ANSIBLE_NOCOLOR="1", ANSIBLE_LOCAL_TEMP=os.path.join(tmp, "tmp"))
+                   ANSIBLE_CALLBACK_RESULT_FORMAT="json", ANSIBLE_CALLBACK_FORMAT_PRETTY="false", ANSIBLE_NOCOLOR="1",
+                   ANSIBLE_INVENTORY_UNPARSED_FAILED="1", ANSIBLE_INVENTORY_ANY_UNPARSED_IS_FAILED="1", ANSIBLE_LOCAL_TEMP=os.path.join(tmp, "tmp"))
         # Job containers have no USER; defaults such as lookup('env', 'USER') would come out empty
         env.setdefault("USER", "infra-spec")
         for playbook in sorted({e[0] for e in entries}):
@@ -295,13 +308,13 @@ def main():
                     if inv not in inventories:
                         print(f"  WARNING {inv}: no such inventory in {inv_dir}, skipped")
                         continue
-                    failed += check_inventory(tmp, env, os.path.join(inv_dir, inv), inv, limit)
+                    failed += check_inventory(tmp, env, os.path.join(inv_dir, inv), inv, limit, hosts)
     for inv, host, task, reason in failed:
         print(f"FAIL {inv} {host}: {task}: {reason}")
     return 1 if failed else 0
 
 
-def check_inventory(tmp, env, inv_path, inv, limit):
+def check_inventory(tmp, env, inv_path, inv, limit, hosts="all"):
     """Run the generated play against one inventory; failures as (inventory, host, task, reason)."""
     # Extra vars outrank inventory variables: an ansible_connection or ansible_become set in an
     # inventory must never turn this into a real connection or a privilege escalation.
@@ -316,6 +329,8 @@ def check_inventory(tmp, env, inv_path, inv, limit):
     if proc.returncode != 0 and not found:
         last = [l for l in out.splitlines() if "ERROR" in l or "error" in l.lower()][-1:]
         found = [("-", "ansible-playbook", QUOTED.sub("'***'", last[0]) if last else f"exit {proc.returncode}")]
+    if not checked and not found and hosts == "all":
+        found = [("-", "inventory", "no hosts, the inventory is empty or the host pattern matches none")]
     print(f"  {inv}: {len(checked)} hosts, {'FAILED' if found else 'ok'}")
     return [(inv, *f) for f in found]
 
