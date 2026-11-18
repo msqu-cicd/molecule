@@ -67,7 +67,7 @@ TCG (works, but slow) without it.
 ## Vultr
 
 Used by roles that need distributions Hetzner does not offer (Arch Linux workstations).
-- `VULTR_API_KEY` (required), `INSTANCE_SIZE` (default `vc2-1c-1gb`, 25 GB disk), `INSTANCE_REGION` (default `fra`)
+- `VULTR_API_KEY` (required), `INSTANCE_SIZE` (default `vhp-1c-1gb-amd`, 1 vCPU, 1 GB, 25 GB NVMe; `vc2-1c-1gb` is no longer offered in `fra`), `INSTANCE_REGION` (default `fra`)
 - Instances are labelled `molecule-<repo>`, without a VPC (the single test instance needs no private network)
 
 ## EC2
