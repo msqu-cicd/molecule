@@ -10,7 +10,7 @@ MOLECULE_LINT_IMAGE := ghcr.io/msqu-devops/molecule:lint
 
 # Molecule settings
 MOLECULE_GIT_REPO := ssh://git@git.msqu.de:22222/CICD/molecule.git
-# branch, tag or commit of CICD/molecule to take the scenario from (CI: the molecule_ref input)
+# branch, tag or full commit SHA of CICD/molecule to take the scenario from (CI: the molecule_ref input)
 MOLECULE_REF ?= main
 DRIVER ?= kvm
 MOLECULE_DISTRO ?= debian-13

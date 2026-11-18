@@ -39,7 +39,7 @@ delete() {
 # stdin: hcloud lines whose last field is an age (Xs, Xm, Xh up to 23h, then Xd, or "just now");
 # prints the lines older than max_age hours
 older() {
-  awk -v max="$max_age" '{ a = $NF; u = substr(a, length(a)); n = substr(a, 1, length(a) - 1) + 0; if (u == "d" || (u == "h" && n >= max)) print }'
+  awk -v max="$max_age" '{ a = $NF; u = substr(a, length(a)); n = substr(a, 1, length(a) - 1) + 0; if ((u == "d" && n * 24 >= max) || (u == "h" && n >= max)) print }'
 }
 
 # Failed list calls abort the script (set -e, pipefail): "the API cannot be queried" must not read
