@@ -5,7 +5,7 @@
   vars:
     hcloud_capacity_error: >-
       {{ (ansible_failed_result.failure.code | default('')) in ['resource_unavailable', 'placement_error', 'invalid_server_type']
-         or (ansible_failed_result.msg | default('')) is search('unsupported location for server type|error during placement') }}
+         or (ansible_failed_result.msg | default('')) is search('unsupported location for server type|error during placement|not available for order') }}
   block:
     - name: Create {{ current_platform.name }} with {{ current_server_type }} in {{ current_location }}
       hetzner.hcloud.server:

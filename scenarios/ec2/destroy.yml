@@ -119,16 +119,19 @@
           until: ec2_instances is finished
           retries: 300
 
-        # Without the run config the run id is new and the filter above matches nothing
+        # Without the run config the run id is new and the filter above matches nothing. An empty id
+        # list must never reach ec2_instance: it then filters by the default subnet and terminates that.
         - name: Destroy the instances of the instance config
           when:
             - not run_config_stat.stat.exists
-            - instance_config | length != 0
+            - platform_instance_ids | length > 0
           amazon.aws.ec2_instance:
             profile: "{{ item.aws_profile | default(omit) }}"
             region: "{{ item.region | default(omit) }}"
-            instance_ids: "{{ instance_config | selectattr('instance', 'equalto', item.name) | map(attribute='instance_ids') | flatten }}"
+            instance_ids: "{{ platform_instance_ids }}"
             state: absent
+          vars:
+            platform_instance_ids: "{{ instance_config | selectattr('instance', 'equalto', item.name) | map(attribute='instance_ids') | flatten }}"
           loop: "{{ platforms }}"
           loop_control:
             label: "{{ item.name }}"
