@@ -517,6 +517,8 @@ jobs:
 
   # Runs after all test jobs, also after failures and cancellations: terminates leftover instances
   # of this repo and, as a safety net, any molecule instance older than 3 hours
+  # (scripts/cloud-sweep.sh). Skips with the tests: nothing relevant changed, or a push. A run that is
+  # force-cancelled never gets here: .gitea/workflows/cloud-sweep.yml runs the sweep on a schedule.
   molecule-cleanup:
     runs-on: molecule
     container:
@@ -524,32 +526,23 @@ jobs:
     if: always() && github.event_name != 'push' && (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && (inputs.unit == 'true' || inputs.integration == 'true')
     needs: [changes, molecule-unit-debian, molecule-integration-debian]
     steps:
+      - name: Checkout the sweep script
+        uses: https://github.com/actions/checkout@v7
+        with:
+          github-server-url: https://git.msqu.de
+          repository: cicd/molecule
+          token: '${{ secrets.CI_RUNNER_PAT }}'
+          path: git_molecule
+          ref: ${{ inputs.molecule_ref }}
+          persist-credentials: false
+          sparse-checkout: |
+            scripts
+
       - name: Terminate leftover molecule instances
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.MOLECULE_AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.MOLECULE_AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: ${{ inputs.region }}
         run: |
-          python3 - <<'PY'
-          import datetime, os
-          import boto3
-          project = os.environ["GITHUB_REPOSITORY"].split("/", 1)[1].replace("_", "-")
-          cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=3)
-          ec2 = boto3.client("ec2")
-          # Fails loudly if the API cannot be queried instead of reporting "nothing found"
-          reservations = ec2.describe_instances(Filters=[
-              {"Name": "tag:managed-by", "Values": ["molecule"]},
-              {"Name": "instance-state-name", "Values": ["pending", "running", "stopping", "stopped"]},
-          ])["Reservations"]
-          doomed = []
-          for instance in (i for r in reservations for i in r["Instances"]):
-              tags = {t["Key"]: t["Value"] for t in instance.get("Tags", [])}
-              reason = "this repo" if tags.get("project") == project else "older than 3h" if instance["LaunchTime"] < cutoff else None
-              if reason:
-                  print(f"Terminating {instance['InstanceId']} ({tags.get('Name')}, {reason})")
-                  doomed.append(instance["InstanceId"])
-          if doomed:
-              ec2.terminate_instances(InstanceIds=doomed)
-          else:
-              print("No leftover molecule instances")
-          PY
+          project=${GITHUB_REPOSITORY#*/}
+          SWEEP_PROJECT=${project//_/-} bash git_molecule/scripts/cloud-sweep.sh ec2

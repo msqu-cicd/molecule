@@ -348,9 +348,11 @@ jobs:
           shopt -s dotglob
           rm -rf ./*
 
-  # Runs after all test jobs, also after failures and cancellations: deletes leftover servers
-  # (and, via the role's cleanup.yml, their DNS records) instead of leaving them stopped.
-  # Skips with the tests: nothing relevant changed, or a push (pushes start no instance).
+  # Runs after all test jobs, also after failures and cancellations. The integration job leaves its
+  # instance (VULTR_SERVER_STATE=present), so this job is what deletes it: molecule destroy, then a
+  # sweep of this repo's instances and every molecule instance older than 3 hours
+  # (scripts/cloud-sweep.sh). Skips with the tests: nothing relevant changed, or a push. A run that is
+  # force-cancelled never gets here: .gitea/workflows/cloud-sweep.yml runs the sweep on a schedule.
   molecule-cleanup:
     runs-on: molecule
     container:
@@ -401,6 +403,7 @@ jobs:
           persist-credentials: false
           sparse-checkout: |
             scenarios/vultr
+            scripts
 
       - name: Prepare Ansible Vault
         env:
@@ -422,25 +425,12 @@ jobs:
         env:
           VULTR_API_KEY: ${{ secrets.VULTR_API_KEY }}
 
-      - name: Cleanup orphaned Vultr resources
-        continue-on-error: true
+      # Fails when the API cannot be queried or a deletion fails; unlike the destroy above it is not
+      # allowed to pass silently
+      - name: Sweep leftover cloud resources
         env:
           VULTR_API_KEY: ${{ secrets.VULTR_API_KEY }}
-        run: |
-          echo "Checking for orphaned Vultr resources..."
-          # Fail loudly if the API cannot be queried instead of reporting "nothing found"
-          ALL_INSTANCES=$(vultr-cli instance list --output json)
-          INSTANCE_LIST=$(echo "$ALL_INSTANCES" | jq -r --arg label "molecule-${CI_PROJECT_NAME_MOLECULE}" '.instances[]? | select(.label == $label) | .id')
-          if [ -n "$INSTANCE_LIST" ]; then
-            echo "Found orphaned instances:"
-            echo "$INSTANCE_LIST"
-            echo "$INSTANCE_LIST" | while read -r instance_id; do
-              echo "Deleting instance: $instance_id"
-              vultr-cli instance delete "$instance_id" || echo "Failed to delete $instance_id"
-            done
-          else
-            echo "No orphaned instances found"
-          fi
+        run: SWEEP_PROJECT="$CI_PROJECT_NAME_MOLECULE" bash git_molecule/scripts/cloud-sweep.sh vultr
 
       - name: Cleanup workspace
         if: always()
