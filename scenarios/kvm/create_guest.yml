@@ -13,6 +13,39 @@
     # fixed per platform so network-config can match it
     guest_mac: "52:54:00:00:00:{{ '%02x' | format(platform_index | int + 16) }}"
 
+# A pid file alone proves nothing: a create that re-runs without destroy finds the
+# pid file of a QEMU that is gone (killed, container restarted), and its pid may
+# belong to another process now. The guest runs when /proc/<pid> is a qemu with this
+# pid file in its command line (a zombie has none). Otherwise the state it left is
+# stale and goes, so the overlay, the seed and the start below run again.
+- name: Check for a running guest
+  ansible.builtin.command:
+    argv:
+      - sh
+      - -c
+      - |
+        pid=$(cat "$1" 2>/dev/null)
+        name=${1##*/}
+        [ -n "$pid" ] || { echo stopped; exit 0; }
+        tr '\0' '\n' 2>/dev/null < "/proc/$pid/cmdline" | awk -v n="/$name" '
+          NR == 1 && $0 !~ /qemu/ { exit 1 }
+          substr($0, length($0) - length(n) + 1) == n { found = 1 }
+          END { exit !found }' && echo running || echo stopped
+      - sh
+      - "{{ guest_pidfile }}"
+  register: guest_check
+  changed_when: false
+
+- name: Remove the state of a stopped guest
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ guest_pidfile }}"
+    - "{{ guest_disk }}"
+    - "{{ guest_seed }}"
+  when: guest_check.stdout == 'stopped'
+
 - name: Create the disk overlay
   ansible.builtin.command:
     argv:
@@ -93,6 +126,7 @@
     creates: "{{ guest_seed }}"
 
 - name: Start the guest
+  when: guest_check.stdout == 'stopped'
   ansible.builtin.command:
     argv: >-
       {{ ['qemu-system-x86_64', '-name', guest_name, '-machine', 'q35']
@@ -107,7 +141,7 @@
             '-netdev', 'user,id=net0,hostfwd=tcp:127.0.0.1:' + (guest_port | string) + '-:22',
             '-device', 'virtio-net-pci,netdev=net0,mac=' + guest_mac,
             '-rtc', 'base=utc'] }}
-    creates: "{{ guest_pidfile }}"
+  changed_when: true
 
 - name: Remember the guest
   ansible.builtin.set_fact:
