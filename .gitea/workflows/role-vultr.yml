@@ -1,4 +1,5 @@
-# Reusable molecule workflow for Ansible roles (vultr scenario).
+# Reusable molecule workflow for Ansible roles (vultr scenario). Pushes to the default branch run
+# lint, infra-spec and the secret scan only, so they start no Vultr instance.
 # Called from each role's .gitea/workflows/molecule.yml; see README.md for the caller template.
 name: Molecule (vultr)
 

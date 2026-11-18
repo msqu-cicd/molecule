@@ -1,7 +1,7 @@
 # Reusable molecule workflow for Ansible roles (hetznercloud scenario), Debian only. For roles the
 # kvm runner cannot test, e.g. multi-node scenarios whose servers must reach each other (k3s, rke2);
 # every other role uses role-kvm.yml. Pushes to the default branch (merges, already tested in their
-# pull request) run lint only, so they start no Hetzner servers.
+# pull request) run lint, infra-spec and the secret scan only, so they start no Hetzner servers.
 # Called from each role's .gitea/workflows/molecule.yml; see README.md for the caller template.
 name: Molecule (hetznercloud)
 
