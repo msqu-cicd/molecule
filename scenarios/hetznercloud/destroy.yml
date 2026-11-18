@@ -82,18 +82,14 @@
           retries: 300
           with_items: "{{ volumes.results }}"
 
+        # every platform's network once (platforms usually share one)
         - name: Destroy network(s)
-          when:
-            - ansible_loop.first
-            - item.network is defined
           hetzner.hcloud.network:
-            name: "{{ item.network[0].name }}"
+            name: "{{ item }}"
             api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_TOKEN') }}"
             state: absent
           register: networks
-          loop: "{{ molecule_yml.platforms }}"
-          loop_control:
-            extended: yes
+          loop: "{{ molecule_yml.platforms | selectattr('network', 'defined') | map(attribute='network') | map('first') | map(attribute='name') | unique }}"
 
     - name: Stop Hcloud Server
       when:
