@@ -5,7 +5,6 @@ exclude_paths:
   - .gitlab-ci.yml
 offline: true
 warn_list:
-  - '106'
   - command-instead-of-module
   - key-order[task]
   - name[template]
