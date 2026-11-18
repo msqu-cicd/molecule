@@ -30,7 +30,8 @@ jobs:
       - name: Run Ansible/apt molecule tests with this molecule ref
         env:
           TOKEN: ${{ secrets.CI_RUNNER_PAT }}
-          MOLECULE_REF: ${{ github.head_ref || github.ref_name }}
+          # the commit under test, not a branch name that can move or vanish while the run waits in the queue
+          MOLECULE_REF: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           api="${GITHUB_SERVER_URL}/api/v1/repos/Ansible/apt/actions"
