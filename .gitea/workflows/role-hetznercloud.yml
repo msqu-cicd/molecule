@@ -158,17 +158,32 @@ jobs:
     container:
       image: ghcr.io/msqu-devops/molecule:runner@sha256:48a43e05780540f368aa82b3a57218d59b73ea042a21eeb967837a49e9c20da6
     steps:
+      # A pull request is scanned commit by commit, so a secret added and removed again inside it is
+      # found; a push or dispatch scans the checked-out tree.
       - name: Checkout repository
         uses: https://github.com/actions/checkout@v7
         with:
+          fetch-depth: ${{ github.event_name == 'pull_request' && 0 || 1 }}
           persist-credentials: false
 
       - name: Gitleaks
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_REF: ${{ github.base_ref }}
         run: |
           config=$(mktemp)
           printf '[extend]\nuseDefault = true\n' > "$config"
           rm -f .gitleaksignore
-          gitleaks dir . --config "$config" --ignore-gitleaks-allow --redact --no-banner
+          if [ "$EVENT_NAME" = pull_request ]; then
+            # the commits of the pull request: reachable from its head, not from the target branch
+            base=${BASE_SHA:-origin/$BASE_REF}
+            git rev-parse --verify --quiet "$base^{commit}" > /dev/null || { echo "Cannot resolve the pull request base '$base'" >&2; exit 1; }
+            echo "Scanning the commits $base..HEAD"
+            gitleaks git --log-opts="$base..HEAD" --config "$config" --ignore-gitleaks-allow --redact --no-banner .
+          else
+            gitleaks dir . --config "$config" --ignore-gitleaks-allow --redact --no-banner
+          fi
 
   # The role's argument specs and asserts against the real infra inventories: every host an infra
   # playbook applies the role to, local connection, no test server (scripts/infra-spec-check.py).
