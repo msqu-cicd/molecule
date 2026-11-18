@@ -6,16 +6,16 @@
   no_log: "{{ molecule_no_log }}"
   vars:
     # Run config handling
-    default_run_id: "{{ lookup('password', '/dev/null chars=ascii_lowercase length=5') }}"
+    default_run_id: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_lowercase length=5') }}"
     default_run_config:
       run_id: "{{ default_run_id }}"
 
-    run_config_path: "{{ lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}/run-config.yml"
-    run_config_from_file: "{{ (lookup('file', run_config_path, errors='ignore') or '{}') | from_yaml }}"
+    run_config_path: "{{ lookup('ansible.builtin.env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}/run-config.yml"
+    run_config_from_file: "{{ (lookup('ansible.builtin.file', run_config_path, errors='ignore') or '{}') | from_yaml }}"
     run_config: '{{ default_run_config | combine(run_config_from_file) }}'
 
     # Platform settings handling
-    default_aws_profile: "{{ lookup('env', 'AWS_PROFILE') }}"
+    default_aws_profile: "{{ lookup('ansible.builtin.env', 'AWS_PROFILE') }}"
     default_key_inject_method: cloud-init # valid values: [cloud-init, ec2]
     default_key_name: "molecule-{{ run_config.run_id }}"
     default_security_group_name: "molecule-{{ run_config.run_id }}"
@@ -40,7 +40,7 @@
            | list }}
 
     # Stored instance config
-    instance_config: "{{ (lookup('file', molecule_instance_config, errors='ignore') or '{}') | from_yaml }}"
+    instance_config: "{{ (lookup('ansible.builtin.file', molecule_instance_config, errors='ignore') or '{}') | from_yaml }}"
   pre_tasks:
     - name: Validate platform configurations
       ansible.builtin.assert:
@@ -82,15 +82,24 @@
         index_var: index
         label: "{{ platform.name }}"
 
+    - name: Check for the run config
+      ansible.builtin.stat:
+        path: "{{ run_config_path }}"
+      register: run_config_stat
+
+    # The instance config is written after all instances exist; the run config at the
+    # start of create. A create that failed half way has only the run config, and its
+    # instances, security groups and keys carry the run id.
     - name: Destroy resources
-      when: instance_config | length != 0
+      when: run_config_stat.stat.exists or instance_config | length != 0
       block:
         - name: Destroy ephemeral EC2 instances
           amazon.aws.ec2_instance:
             profile: "{{ item.aws_profile | default(omit) }}"
             region: "{{ item.region | default(omit) }}"
-            instance_ids: "{{ instance_config | map(attribute='instance_ids') | flatten }}"
-            vpc_subnet_id: "{{ item.vpc_subnet_id }}"
+            filters:
+              "tag:molecule-run-id": "{{ run_config.run_id }}"
+              "tag:instance": "{{ item.name }}"
             state: absent
           loop: "{{ platforms }}"
           loop_control:
@@ -109,6 +118,23 @@
           register: ec2_instances
           until: ec2_instances is finished
           retries: 300
+
+        # Without the run config the run id is new and the filter above matches nothing. An empty id
+        # list must never reach ec2_instance: it then filters by the default subnet and terminates that.
+        - name: Destroy the instances of the instance config
+          when:
+            - not run_config_stat.stat.exists
+            - platform_instance_ids | length > 0
+          amazon.aws.ec2_instance:
+            profile: "{{ item.aws_profile | default(omit) }}"
+            region: "{{ item.region | default(omit) }}"
+            instance_ids: "{{ platform_instance_ids }}"
+            state: absent
+          vars:
+            platform_instance_ids: "{{ instance_config | selectattr('instance', 'equalto', item.name) | map(attribute='instance_ids') | flatten }}"
+          loop: "{{ platforms }}"
+          loop_control:
+            label: "{{ item.name }}"
 
         - name: Destroy ephemeral security groups (if needed)
           amazon.aws.ec2_security_group:

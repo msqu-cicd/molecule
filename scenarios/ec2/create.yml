@@ -6,22 +6,22 @@
   no_log: "{{ molecule_no_log }}"
   vars:
     # Run config handling
-    default_run_id: "{{ lookup('password', '/dev/null chars=ascii_lowercase length=5') }}"
+    default_run_id: "{{ lookup('ansible.builtin.password', '/dev/null chars=ascii_lowercase length=5') }}"
     default_run_config:
       run_id: "{{ default_run_id }}"
 
-    run_config_path: "{{ lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}/run-config.yml"
-    run_config_from_file: "{{ (lookup('file', run_config_path, errors='ignore') or '{}') | from_yaml }}"
+    run_config_path: "{{ lookup('ansible.builtin.env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}/run-config.yml"
+    run_config_from_file: "{{ (lookup('ansible.builtin.file', run_config_path, errors='ignore') or '{}') | from_yaml }}"
     run_config: '{{ default_run_config | combine(run_config_from_file) }}'
 
     # Platform settings handling
     default_assign_public_ip: true
-    default_aws_profile: "{{ lookup('env', 'AWS_PROFILE') }}"
+    default_aws_profile: "{{ lookup('ansible.builtin.env', 'AWS_PROFILE') }}"
     default_boot_wait_seconds: 120
     default_instance_type: t3a.medium
     default_key_inject_method: cloud-init # valid values: [cloud-init, ec2]
     default_key_name: "molecule-{{ run_config.run_id }}"
-    default_private_key_path: "{{ lookup('env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}/id_rsa"
+    default_private_key_path: "{{ lookup('ansible.builtin.env', 'MOLECULE_EPHEMERAL_DIRECTORY') }}/id_rsa"
     default_public_key_path: "{{ default_private_key_path }}.pub"
     default_ssh_user: ansible
     default_ssh_port: 22
@@ -185,7 +185,6 @@
     - name: Create ephemeral security groups (if needed)
       amazon.aws.ec2_security_group:
         profile: "{{ item.aws_profile | default(omit) }}"
-        iam_instance_profile: "{{ item.iam_instance_profile | default(omit) }}"
         region: "{{ item.region | default(omit) }}"
         vpc_id: "{{ item.vpc_id or vpc_subnet.vpc_id }}"
         name: "{{ item.security_group_name }}"

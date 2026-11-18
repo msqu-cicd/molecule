@@ -22,28 +22,68 @@
     - name: Use existing SSH key
       when: id_ed25519_stat.stat.exists
       block:
-        - name: Create public SSH key
-          ansible.builtin.shell: |
-            ssh-keygen -y -f {{ ssh_id_path }} > {{ ssh_id_path }}.pub
+        - name: Derive the public SSH key
+          ansible.builtin.command:
+            argv:
+              - ssh-keygen
+              - -y
+              - -f
+              - "{{ ssh_id_path | expanduser }}"
+          register: derived_public_ssh_key
           changed_when: false
+          when: not id_ed25519_pub_stat.stat.exists
+
+        - name: Create public SSH key
+          ansible.builtin.copy:
+            content: "{{ derived_public_ssh_key.stdout }}\n"
+            dest: "{{ ssh_id_path | expanduser }}.pub"
+            mode: "0644"
           when: not id_ed25519_pub_stat.stat.exists
 
         - name: Register the SSH key facts
           ansible.builtin.set_fact:
-            existing_ssh_key_name: "molecule"
             generated_public_ssh_key: "{{ lookup('ansible.builtin.file', ssh_id_path + '.pub') | trim }}"
 
-        - name: Register SSH key for test instance(s)
-          vultr.cloud.ssh_key:
-            name: "{{ existing_ssh_key_name }}"
-            ssh_key: "{{ generated_public_ssh_key }}"
-            api_key: "{{ lookup('env', 'VULTR_API_KEY') }}"
-            state: present
-          register: molecule_ssh_key
-          # The same key may already be registered under another name; anything else is a real error
-          failed_when:
-            - molecule_ssh_key is failed
-            - "'already' not in (molecule_ssh_key.msg | default(''))"
+        # The same key may already be registered under another name: use that name. A missing key is
+        # registered under a name derived from it: ssh_key updates the key of an existing name in place
+        - name: Look for the key in the account
+          vultr.cloud.ssh_key_info:
+            api_key: "{{ lookup('ansible.builtin.env', 'VULTR_API_KEY') }}"
+          register: vultr_ssh_keys
+
+        # A concurrent job may register the same key first: look again, and fail if the key is still missing
+        - name: Register the key when it is missing
+          when: vultr_ssh_keys.vultr_ssh_key_info | selectattr('ssh_key', 'contains', generated_public_ssh_key.split()[1]) | list | length == 0
+          block:
+            - name: Register SSH key for test instance(s)
+              vultr.cloud.ssh_key:
+                name: "molecule-{{ (generated_public_ssh_key.split()[1] | ansible.builtin.hash('sha256'))[:12] }}"
+                ssh_key: "{{ generated_public_ssh_key }}"
+                api_key: "{{ lookup('ansible.builtin.env', 'VULTR_API_KEY') }}"
+                state: present
+          rescue:
+            - name: Registering the key failed, looking for it again
+              ansible.builtin.debug:
+                msg: "{{ ansible_failed_result.msg | default('no message') }}"
+
+        - name: Read the keys again
+          vultr.cloud.ssh_key_info:
+            api_key: "{{ lookup('ansible.builtin.env', 'VULTR_API_KEY') }}"
+          register: vultr_ssh_keys
+
+        - name: Register the name of the key
+          ansible.builtin.set_fact:
+            existing_ssh_key_name: >-
+              {{ vultr_ssh_keys.vultr_ssh_key_info
+                 | selectattr('ssh_key', 'contains', generated_public_ssh_key.split()[1])
+                 | map(attribute='name') | first | default('') }}
+
+        - name: Check that the key is registered
+          ansible.builtin.assert:
+            that:
+              - existing_ssh_key_name | length > 0
+            fail_msg: "{{ ssh_id_path }}.pub is not registered in the Vultr account and registering it failed"
+            quiet: true
 
     - name: Create new SSH key
       when: not id_ed25519_stat.stat.exists
@@ -63,7 +103,7 @@
           vultr.cloud.ssh_key:
             name: "{{ ssh_key_name }}"
             ssh_key: "{{ generated_ssh_key.public_key }}"
-            api_key: "{{ lookup('env', 'VULTR_API_KEY') }}"
+            api_key: "{{ lookup('ansible.builtin.env', 'VULTR_API_KEY') }}"
             state: present
 
     - name: Set vultr facts
@@ -88,7 +128,7 @@
         backups: false
         ddos_protection: false
         region: "{{ item.region }}"
-        api_key: "{{ lookup('env', 'VULTR_API_KEY') }}"
+        api_key: "{{ lookup('ansible.builtin.env', 'VULTR_API_KEY') }}"
         ssh_keys:
           - "{{ final_ssh_key_name }}"
         state: "{{ vultr_server_state }}"
@@ -97,7 +137,7 @@
 
     - name: Gather instance information when already exists
       vultr.cloud.instance_info:
-        api_key: "{{ lookup('env', 'VULTR_API_KEY') }}"
+        api_key: "{{ lookup('ansible.builtin.env', 'VULTR_API_KEY') }}"
       register: existing_instances
       when: vultr_server_state == 'present'
 
@@ -143,9 +183,15 @@
         - existing_instances.vultr_instance_info is defined
         - instance.label in (molecule_yml.platforms | map(attribute='name') | list)
 
+    # A newly created instance is in the results of both tasks above
     - name: Convert instance config dict to a list
       ansible.builtin.set_fact:
-        instance_conf: "{{ (instance_config_dict.results | default([]) | selectattr('ansible_facts', 'defined') | map(attribute='ansible_facts.instance_conf_dict') | list) + (existing_instance_config_dict.results | default([]) | selectattr('ansible_facts', 'defined') | map(attribute='ansible_facts.instance_conf_dict') | list) }}"
+        instance_conf: >-
+          {{ ((instance_config_dict.results | default([]) | selectattr('ansible_facts', 'defined')
+                 | map(attribute='ansible_facts.instance_conf_dict') | list)
+              + (existing_instance_config_dict.results | default([]) | selectattr('ansible_facts', 'defined')
+                 | map(attribute='ansible_facts.instance_conf_dict') | list))
+             | unique(attribute='instance') | list }}
       when: >
         (instance_config_dict.results | default([]) | selectattr('ansible_facts', 'defined') | list | length > 0) or
         (existing_instance_config_dict.results | default([]) | selectattr('ansible_facts', 'defined') | list | length > 0)
@@ -162,7 +208,7 @@
 
     - name: Dump instance config
       ansible.builtin.debug:
-        msg: "content of instance config: {{ lookup('file', molecule_instance_config) | from_yaml }}"
+        msg: "content of instance config: {{ lookup('ansible.builtin.file', molecule_instance_config) | from_yaml }}"
       when: instance_conf is defined and instance_conf | length > 0
 
     - name: Wait for SSH port to become available
@@ -172,7 +218,7 @@
         search_regex: OpenSSH
         delay: 5
         timeout: 90
-      loop: "{{ lookup('file', molecule_instance_config, errors='ignore') | default('[]', true) | from_yaml }}"
+      loop: "{{ lookup('ansible.builtin.file', molecule_instance_config, errors='ignore') | default('[]', true) | from_yaml }}"
       loop_control:
         label: "{{ item.instance }}"
       when: instance_conf is defined and instance_conf | length > 0
@@ -180,14 +226,24 @@
       delay: 10
 
     - name: Test SSH connection
-      ansible.builtin.shell: >
-        ssh -o ConnectTimeout=10
-        -o StrictHostKeyChecking=no
-        -o UserKnownHostsFile=/dev/null
-        -o BatchMode=yes
-        -i {{ item.identity_file }}
-        {{ item.user }}@{{ item.address }} whoami
-      loop: "{{ lookup('file', molecule_instance_config, errors='ignore') | default('[]', true) | from_yaml }}"
+      ansible.builtin.command:
+        argv:
+          - ssh
+          - -o
+          - ConnectTimeout=10
+          - -o
+          - StrictHostKeyChecking=no
+          - -o
+          - UserKnownHostsFile=/dev/null
+          - -o
+          - BatchMode=yes
+          - -i
+          - "{{ item.identity_file | expanduser }}"
+          - -p
+          - "{{ item.port }}"
+          - "{{ item.user }}@{{ item.address }}"
+          - whoami
+      loop: "{{ lookup('ansible.builtin.file', molecule_instance_config, errors='ignore') | default('[]', true) | from_yaml }}"
       loop_control:
         label: "{{ item.instance }}"
       register: ssh_test

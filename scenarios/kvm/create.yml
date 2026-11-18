@@ -16,6 +16,9 @@
     kvm_work_dir: "{{ lookup('ansible.builtin.env', 'KVM_WORK_DIR') | default(molecule_ephemeral_directory + '/kvm', true) }}"
     kvm_image_cache: "{{ lookup('ansible.builtin.env', 'KVM_IMAGE_CACHE') | default('/var/cache/molecule-images', true) }}"
     kvm_distro: "{{ lookup('ansible.builtin.env', 'MOLECULE_DISTRO') }}"
+    kvm_image_file: "{{ kvm_images[kvm_distro].url | basename }}"
+    kvm_hash_algorithm: "{{ kvm_images[kvm_distro].checksum | regex_replace(':.*$', '') }}"
+    kvm_published_sums: "{{ kvm_sums.content | regex_findall('(?m)^([0-9a-f]+)\\s+\\*?' + (kvm_image_file | regex_escape) + '$') | unique | list }}"
     # Keys match the Hetzner image names so MOLECULE_DISTRO means the same in both scenarios
     kvm_images:
       debian-12:
@@ -93,20 +96,27 @@
             state: directory
             mode: "0755"
 
-    - name: Download the cloud image (skipped while the cached copy matches the published checksum)
-      ansible.builtin.get_url:
-        url: "{{ kvm_images[kvm_distro].url }}"
-        dest: "{{ kvm_image_cache }}/{{ kvm_images[kvm_distro].url | basename }}"
-        checksum: "{{ kvm_images[kvm_distro].checksum }}"
-        mode: "0644"
-      register: kvm_base_image
-      retries: 3
-      delay: 10
-      until: kvm_base_image is succeeded
+    # get_url writes next to the destination and moves the file into place; a job
+    # cancelled in between leaves .ansible_tmp* behind in the shared cache. Nothing
+    # that old can belong to a running download.
+    - name: Find download leftovers in the image cache
+      ansible.builtin.find:
+        paths: "{{ kvm_image_cache }}"
+        patterns: ".ansible_tmp*"
+        hidden: true
+        age: 1d
+      register: kvm_cache_leftovers
 
-    # The cache is shared between jobs. Each run works on its own copy and checks
-    # it against the published checksum, so a cache entry changed after get_url
-    # verified it (another job, a refresh) can never reach a guest.
+    - name: Remove the download leftovers
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ kvm_cache_leftovers.files }}"
+      loop_control:
+        label: "{{ item.path | basename }}"
+
+    # Fetched once and used for the download and for the check of the run's copy: a
+    # "latest" that rotates between two fetches cannot make them disagree.
     - name: Fetch the published checksums
       ansible.builtin.uri:
         url: "{{ kvm_images[kvm_distro].checksum | regex_replace('^[a-z0-9]+:', '') }}"
@@ -116,10 +126,31 @@
       delay: 5
       until: kvm_sums is succeeded
 
+    - name: Pick the checksum of the image
+      ansible.builtin.assert:
+        that:
+          - kvm_published_sums | length == 1
+        fail_msg: "{{ kvm_image_file }} has {{ kvm_published_sums | length }} different checksums in {{ kvm_images[kvm_distro].checksum }}"
+        quiet: true
+
+    - name: Download the cloud image (skipped while the cached copy matches the published checksum)
+      ansible.builtin.get_url:
+        url: "{{ kvm_images[kvm_distro].url }}"
+        dest: "{{ kvm_image_cache }}/{{ kvm_image_file }}"
+        checksum: "{{ kvm_hash_algorithm }}:{{ kvm_published_sums[0] }}"
+        mode: "0644"
+      register: kvm_base_image
+      retries: 3
+      delay: 10
+      until: kvm_base_image is succeeded
+
+    # The cache is shared between jobs. Each run works on its own copy and checks
+    # it against the published checksum, so a cache entry changed after get_url
+    # verified it (another job, a refresh) can never reach a guest.
     - name: Copy the image into the work directory
       ansible.builtin.copy:
         src: "{{ kvm_base_image.dest }}"
-        dest: "{{ kvm_work_dir }}/{{ kvm_base_image.dest | basename }}"
+        dest: "{{ kvm_work_dir }}/{{ kvm_image_file }}"
         remote_src: true
         mode: "0644"
       register: kvm_run_image
@@ -127,17 +158,15 @@
     - name: Checksum the copy
       ansible.builtin.stat:
         path: "{{ kvm_run_image.dest }}"
-        checksum_algorithm: "{{ kvm_images[kvm_distro].checksum | regex_replace(':.*$', '') }}"
+        checksum_algorithm: "{{ kvm_hash_algorithm }}"
       register: kvm_run_image_stat
 
     - name: Verify the copy against the published checksum
       ansible.builtin.assert:
         that:
-          - kvm_run_image_stat.stat.checksum in kvm_published_sums
-        fail_msg: "{{ kvm_run_image.dest | basename }} does not match {{ kvm_images[kvm_distro].checksum }}"
+          - kvm_run_image_stat.stat.checksum == kvm_published_sums[0]
+        fail_msg: "{{ kvm_image_file }} does not match {{ kvm_images[kvm_distro].checksum }}"
         quiet: true
-      vars:
-        kvm_published_sums: "{{ kvm_sums.content | regex_findall('(?m)^([0-9a-f]+)\\s+\\*?' + (kvm_base_image.dest | basename | regex_escape) + '$') }}"
 
     - name: Create the SSH key
       community.crypto.openssh_keypair:

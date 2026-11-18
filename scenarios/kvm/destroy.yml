@@ -7,16 +7,20 @@
   vars:
     kvm_work_dir: "{{ lookup('ansible.builtin.env', 'KVM_WORK_DIR') | default(molecule_ephemeral_directory + '/kvm', true) }}"
   tasks:
-    - name: Populate the instance config
-      ansible.builtin.set_fact:
-        instance_conf: "{{ (lookup('ansible.builtin.file', molecule_instance_config, errors='ignore') or '[]') | from_yaml }}"
+    # Every pid file, not the instance config: that is written only after all guests
+    # started, so a failed create leaves running guests it does not list
+    - name: Find the pid files
+      ansible.builtin.find:
+        paths: "{{ kvm_work_dir }}"
+        patterns: "*.pid"
+      register: kvm_pidfiles
 
     - name: Stop the guests
       ansible.builtin.include_tasks: destroy_guest.yml
-      loop: "{{ instance_conf if instance_conf is sequence and instance_conf is not string else [] }}"
+      loop: "{{ kvm_pidfiles.files | map(attribute='path') | list }}"
       loop_control:
-        loop_var: guest
-        label: "{{ guest.instance }}"
+        loop_var: guest_pidfile_path
+        label: "{{ guest_pidfile_path | basename }}"
 
     - name: Remove the work directory
       ansible.builtin.file:

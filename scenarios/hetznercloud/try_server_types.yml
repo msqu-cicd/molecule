@@ -2,6 +2,10 @@
 # Try each server type and location candidate until one succeeds for a platform
 - name: Try {{ current_server_type }} in {{ current_location }} for {{ current_platform.name }}
   when: current_platform.name not in (created_servers | default({}))
+  vars:
+    hcloud_capacity_error: >-
+      {{ (ansible_failed_result.failure.code | default('')) in ['resource_unavailable', 'placement_error', 'invalid_server_type']
+         or (ansible_failed_result.msg | default('')) is search('unsupported location for server type|error during placement|not available for order') }}
   block:
     - name: Create {{ current_platform.name }} with {{ current_server_type }} in {{ current_location }}
       hetzner.hcloud.server:
@@ -15,7 +19,7 @@
         datacenter: "{{ current_platform.datacenter | default(omit) }}"
         labels: "{{ current_platform.labels | default({}) }}"
         user_data: "{{ server_user_data }}"
-        api_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
+        api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_TOKEN') }}"
         state: "{{ hetzner_server_state }}"
       register: server_attempt
 
@@ -34,8 +38,22 @@
         msg: "Created {{ current_platform.name }} with {{ current_server_type }} in {{ server_attempt.hcloud_server.location }}"
 
   rescue:
+    # Only a type that is sold out or not offered in the location moves on to the next
+    # candidate. API error codes: resource_unavailable (412, "not available for order",
+    # "error during placement"), placement_error, invalid_server_type (deprecated type) and
+    # invalid_input "unsupported location for server type"
+    # (hcloud-go error.go, github.com/hetznercloud/hcloud-go; docs.hetzner.cloud/reference/cloud).
+    # A bad token, image or key fails the run at once with the original message.
     - name: Log failure, trying next
       ansible.builtin.debug:
         msg: >-
           {{ current_server_type }} in {{ current_location }} failed for {{ current_platform.name }}
           ({{ ansible_failed_result.msg | default('no message') }}), trying next...
+      when: hcloud_capacity_error
+
+    - name: Stop on an error that other candidates will not fix
+      ansible.builtin.fail:
+        msg: >-
+          {{ current_server_type }} in {{ current_location }} failed for {{ current_platform.name }}:
+          {{ ansible_failed_result.msg | default('no message') }}
+      when: not hcloud_capacity_error
