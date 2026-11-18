@@ -11,7 +11,7 @@
 
     - name: Populate the instance config
       ansible.builtin.set_fact:
-        instance_conf: "{{ lookup('file', molecule_instance_config, errors='warn') | from_yaml }}"
+        instance_conf: "{{ lookup('ansible.builtin.file', molecule_instance_config, errors='warn') | from_yaml }}"
         skip_instances: false
       register: instance_config_lookup
 
@@ -27,7 +27,7 @@
           vultr.cloud.instance:
             label: "{{ item.name }}"
             region: "{{ item.region }}"
-            api_key: "{{ lookup('env', 'VULTR_API_KEY') }}"
+            api_key: "{{ lookup('ansible.builtin.env', 'VULTR_API_KEY') }}"
             state: absent
           register: server_destroy
           with_items: "{{ molecule_yml.platforms }}"
@@ -43,7 +43,7 @@
           vultr.cloud.instance_info:
             label: "{{ item.name }}"
             region: "{{ item.region }}"
-            api_key: "{{ lookup('env', 'VULTR_API_KEY') }}"
+            api_key: "{{ lookup('ansible.builtin.env', 'VULTR_API_KEY') }}"
           loop: "{{ molecule_yml.platforms }}"
           loop_control:
             label: "{{ item.name }}"
@@ -53,7 +53,7 @@
           vultr.cloud.instance:
             label: "{{ item.item.name }}"
             region: "{{ item.item.region }}"
-            api_key: "{{ lookup('env', 'VULTR_API_KEY') }}"
+            api_key: "{{ lookup('ansible.builtin.env', 'VULTR_API_KEY') }}"
             state: "{{ vultr_server_state }}"
           register: server_stop
           loop: "{{ vultr_server_info_output.results }}"
@@ -65,7 +65,7 @@
     - name: Remove registered SSH key
       vultr.cloud.ssh_key:
         name: "{{ instance_conf[0].ssh_key_name }}"
-        api_key: "{{ lookup('env', 'VULTR_API_KEY') }}"
+        api_key: "{{ lookup('ansible.builtin.env', 'VULTR_API_KEY') }}"
         state: absent
       when:
         - not skip_instances

@@ -22,10 +22,22 @@
     - name: Use existing SSH key
       when: id_ed25519_stat.stat.exists
       block:
-        - name: Create public SSH key
-          ansible.builtin.shell: |
-            ssh-keygen -y -f {{ ssh_id_path }} > {{ ssh_id_path }}.pub
+        - name: Derive the public SSH key
+          ansible.builtin.command:
+            argv:
+              - ssh-keygen
+              - -y
+              - -f
+              - "{{ ssh_id_path | expanduser }}"
+          register: derived_public_ssh_key
           changed_when: false
+          when: not id_ed25519_pub_stat.stat.exists
+
+        - name: Create public SSH key
+          ansible.builtin.copy:
+            content: "{{ derived_public_ssh_key.stdout }}\n"
+            dest: "{{ ssh_id_path | expanduser }}.pub"
+            mode: "0644"
           when: not id_ed25519_pub_stat.stat.exists
 
         - name: Register the SSH key facts
@@ -91,7 +103,7 @@
           vultr.cloud.ssh_key:
             name: "{{ ssh_key_name }}"
             ssh_key: "{{ generated_ssh_key.public_key }}"
-            api_key: "{{ lookup('env', 'VULTR_API_KEY') }}"
+            api_key: "{{ lookup('ansible.builtin.env', 'VULTR_API_KEY') }}"
             state: present
 
     - name: Set vultr facts
@@ -116,7 +128,7 @@
         backups: false
         ddos_protection: false
         region: "{{ item.region }}"
-        api_key: "{{ lookup('env', 'VULTR_API_KEY') }}"
+        api_key: "{{ lookup('ansible.builtin.env', 'VULTR_API_KEY') }}"
         ssh_keys:
           - "{{ final_ssh_key_name }}"
         state: "{{ vultr_server_state }}"
@@ -125,7 +137,7 @@
 
     - name: Gather instance information when already exists
       vultr.cloud.instance_info:
-        api_key: "{{ lookup('env', 'VULTR_API_KEY') }}"
+        api_key: "{{ lookup('ansible.builtin.env', 'VULTR_API_KEY') }}"
       register: existing_instances
       when: vultr_server_state == 'present'
 
@@ -196,7 +208,7 @@
 
     - name: Dump instance config
       ansible.builtin.debug:
-        msg: "content of instance config: {{ lookup('file', molecule_instance_config) | from_yaml }}"
+        msg: "content of instance config: {{ lookup('ansible.builtin.file', molecule_instance_config) | from_yaml }}"
       when: instance_conf is defined and instance_conf | length > 0
 
     - name: Wait for SSH port to become available
@@ -206,7 +218,7 @@
         search_regex: OpenSSH
         delay: 5
         timeout: 90
-      loop: "{{ lookup('file', molecule_instance_config, errors='ignore') | default('[]', true) | from_yaml }}"
+      loop: "{{ lookup('ansible.builtin.file', molecule_instance_config, errors='ignore') | default('[]', true) | from_yaml }}"
       loop_control:
         label: "{{ item.instance }}"
       when: instance_conf is defined and instance_conf | length > 0
@@ -214,14 +226,24 @@
       delay: 10
 
     - name: Test SSH connection
-      ansible.builtin.shell: >
-        ssh -o ConnectTimeout=10
-        -o StrictHostKeyChecking=no
-        -o UserKnownHostsFile=/dev/null
-        -o BatchMode=yes
-        -i {{ item.identity_file }}
-        {{ item.user }}@{{ item.address }} whoami
-      loop: "{{ lookup('file', molecule_instance_config, errors='ignore') | default('[]', true) | from_yaml }}"
+      ansible.builtin.command:
+        argv:
+          - ssh
+          - -o
+          - ConnectTimeout=10
+          - -o
+          - StrictHostKeyChecking=no
+          - -o
+          - UserKnownHostsFile=/dev/null
+          - -o
+          - BatchMode=yes
+          - -i
+          - "{{ item.identity_file | expanduser }}"
+          - -p
+          - "{{ item.port }}"
+          - "{{ item.user }}@{{ item.address }}"
+          - whoami
+      loop: "{{ lookup('ansible.builtin.file', molecule_instance_config, errors='ignore') | default('[]', true) | from_yaml }}"
       loop_control:
         label: "{{ item.instance }}"
       register: ssh_test

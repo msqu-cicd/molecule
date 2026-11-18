@@ -19,7 +19,7 @@
         datacenter: "{{ current_platform.datacenter | default(omit) }}"
         labels: "{{ current_platform.labels | default({}) }}"
         user_data: "{{ server_user_data }}"
-        api_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
+        api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_TOKEN') }}"
         state: "{{ hetzner_server_state }}"
       register: server_attempt
 

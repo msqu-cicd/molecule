@@ -16,7 +16,7 @@
 
     - name: Populate the instance config
       ansible.builtin.set_fact:
-        instance_conf: "{{ lookup('file', molecule_instance_config, errors='warn') | from_yaml }}"
+        instance_conf: "{{ lookup('ansible.builtin.file', molecule_instance_config, errors='warn') | from_yaml }}"
         skip_instances: false
       register: instance_config_lookup
 
@@ -29,7 +29,7 @@
     - name: Gather hcloud server infos
       hetzner.hcloud.server_info:
         name: "{{ item.name }}"
-        api_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
+        api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_TOKEN') }}"
       with_items: "{{ molecule_yml.platforms }}"
       register: hcloud_server_info_output
 
@@ -43,7 +43,7 @@
         - name: Destroy molecule instance(s)
           hetzner.hcloud.server:
             name: "{{ item.name }}"
-            api_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
+            api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_TOKEN') }}"
             state: absent
           register: server_destroy
           with_items: "{{ molecule_yml.platforms }}"
@@ -66,7 +66,7 @@
         - name: Destroy volume(s)
           hetzner.hcloud.volume:
             name: "{{ item.1.name | default(item.0.name) }}"
-            api_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
+            api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_TOKEN') }}"
             state: absent
           register: volumes
           loop: "{{ molecule_yml.platforms | subelements('volumes', skip_missing=True) }}"
@@ -88,7 +88,7 @@
             - item.network is defined
           hetzner.hcloud.network:
             name: "{{ item.network[0].name }}"
-            api_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
+            api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_TOKEN') }}"
             state: absent
           register: networks
           loop: "{{ molecule_yml.platforms }}"
@@ -102,7 +102,7 @@
         - name: "Trigger molecule instance(s) desired state {{ hetzner_server_state }}"
           hetzner.hcloud.server:
             name: "{{ item.item.name }}"
-            api_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
+            api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_TOKEN') }}"
             state: "{{ hetzner_server_state }}"
           register: server_stop
           loop: "{{ hcloud_server_info_output.results }}"
@@ -124,7 +124,7 @@
     - name: Remove registered SSH key
       hetzner.hcloud.ssh_key:
         name: "{{ instance_conf[0].ssh_key_name }}"
-        api_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
+        api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_TOKEN') }}"
         state: absent
       when:
         - not skip_instances

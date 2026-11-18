@@ -36,10 +36,22 @@
     - name: Use existing SSH key
       when: id_ed25519_stat.stat.exists
       block:
-        - name: Create public SSH key
-          ansible.builtin.shell: |
-            ssh-keygen -y -f {{ ssh_id_path }} > {{ ssh_id_path }}.pub
+        - name: Derive the public SSH key
+          ansible.builtin.command:
+            argv:
+              - ssh-keygen
+              - -y
+              - -f
+              - "{{ ssh_id_path | expanduser }}"
+          register: derived_public_ssh_key
           changed_when: false
+          when: not id_ed25519_pub_stat.stat.exists
+
+        - name: Create public SSH key
+          ansible.builtin.copy:
+            content: "{{ derived_public_ssh_key.stdout }}\n"
+            dest: "{{ ssh_id_path | expanduser }}.pub"
+            mode: "0644"
           when: not id_ed25519_pub_stat.stat.exists
 
         - name: Register the SSH key facts
@@ -106,7 +118,7 @@
           hetzner.hcloud.ssh_key:
             name: "{{ ssh_key_name }}"
             public_key: "{{ generated_ssh_key.public_key }}"
-            api_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
+            api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_TOKEN') }}"
             state: present
 
     - name: Set hetzner facts
@@ -156,7 +168,7 @@
       block:
         - name: Read server types
           hetzner.hcloud.server_type_info:
-            api_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
+            api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_TOKEN') }}"
           register: _server_type_info
       rescue:
         - name: Availability unknown, every type and location will be tried
@@ -168,7 +180,7 @@
     - name: Look up existing servers
       hetzner.hcloud.server_info:
         name: "{{ item.name }}"
-        api_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
+        api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_TOKEN') }}"
       loop: "{{ molecule_yml.platforms }}"
       loop_control:
         label: "{{ item.name }}"
@@ -245,7 +257,7 @@
         location: "{{ item.1.location | default(omit) }}"
         size: "{{ item.1.size | default(10) }}"
         labels: "{{ item.0.labels | default({}) }}"
-        api_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
+        api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_TOKEN') }}"
         state: "present"
       loop: "{{ molecule_yml.platforms | subelements('volumes', skip_missing=True) }}"
       register: volumes
@@ -268,7 +280,7 @@
         name: "{{ item.network[0].name }}"
         ip_range: "{{ item.network[0].ip_range | default(omit) }}"
         labels: "{{ item.labels | default({}) }}"
-        api_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
+        api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_TOKEN') }}"
         state: "present"
       loop: "{{ molecule_yml.platforms }}"
       loop_control:
@@ -301,7 +313,7 @@
         ip_range: "{{ item.network[0].subnet[0].ip | ansible.utils.ipaddr('network/prefix') }}"
         network_zone: "{{ item.network[0].subnet[0].network_zone | default('eu-central') }}"
         type: "{{ item.network[0].subnet[0].type | default('cloud') }}"
-        api_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
+        api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_TOKEN') }}"
         state: "present"
       loop: "{{ molecule_yml.platforms }}"
       loop_control:
@@ -316,7 +328,7 @@
         network: "{{ item.network[0].name }}"
         server: "{{ item.name }}"
         ip: "{{ item.network[0].subnet[0].ip | ansible.utils.ipaddr('address') }}"
-        api_token: "{{ lookup('env', 'HCLOUD_TOKEN') }}"
+        api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_TOKEN') }}"
         state: "present"
       loop: "{{ molecule_yml.platforms }}"
       when: lookup('ansible.builtin.env', 'HCLOUD_PRIVATE_NET', default='false') | bool
@@ -358,7 +370,7 @@
 
     - name: Dump instance config
       ansible.builtin.debug:
-        msg: "content of instance config: {{ lookup('file', molecule_instance_config) | from_yaml }}"
+        msg: "content of instance config: {{ lookup('ansible.builtin.file', molecule_instance_config) | from_yaml }}"
 
     - name: Wait for SSH port to become available
       ansible.builtin.wait_for:
@@ -367,21 +379,31 @@
         search_regex: OpenSSH
         delay: 5
         timeout: 90
-      loop: "{{ lookup('file', molecule_instance_config) | from_yaml }}"
+      loop: "{{ lookup('ansible.builtin.file', molecule_instance_config) | from_yaml }}"
       loop_control:
         label: "{{ item.instance }}"
       retries: 3
       delay: 10
 
     - name: Test SSH connection
-      ansible.builtin.shell: >
-        ssh -o ConnectTimeout=10
-        -o StrictHostKeyChecking=no
-        -o UserKnownHostsFile=/dev/null
-        -o BatchMode=yes
-        -i {{ item.identity_file }}
-        {{ item.user }}@{{ item.address }} whoami
-      loop: "{{ lookup('file', molecule_instance_config) | from_yaml }}"
+      ansible.builtin.command:
+        argv:
+          - ssh
+          - -o
+          - ConnectTimeout=10
+          - -o
+          - StrictHostKeyChecking=no
+          - -o
+          - UserKnownHostsFile=/dev/null
+          - -o
+          - BatchMode=yes
+          - -i
+          - "{{ item.identity_file | expanduser }}"
+          - -p
+          - "{{ item.port }}"
+          - "{{ item.user }}@{{ item.address }}"
+          - whoami
+      loop: "{{ lookup('ansible.builtin.file', molecule_instance_config) | from_yaml }}"
       loop_control:
         label: "{{ item.instance }}"
       register: ssh_test
