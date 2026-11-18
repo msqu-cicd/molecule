@@ -159,11 +159,11 @@ jobs:
       image: ghcr.io/msqu-devops/molecule:runner@sha256:48a43e05780540f368aa82b3a57218d59b73ea042a21eeb967837a49e9c20da6
     steps:
       # A pull request is scanned commit by commit, so a secret added and removed again inside it is
-      # found; a push or dispatch scans the checked-out tree.
+      # found (full history, so the base commit resolves); a push or dispatch scans the checked-out tree.
       - name: Checkout repository
         uses: https://github.com/actions/checkout@v7
         with:
-          fetch-depth: ${{ github.event_name == 'pull_request' && 0 || 1 }}
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Gitleaks

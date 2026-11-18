@@ -53,7 +53,7 @@ sweep_hetzner() {
   victims=$(
     {
       if [ -n "$project" ]; then
-        awk -v re="^molecule-${project}(-node[0-9]+)?\$" '$2 ~ re { print $1, $2 }' <<< "$all"
+        awk -v p="molecule-$project" '{ n = $2; sub(/-node[0-9]+$/, "", n) } n == p { print $1, $2 }' <<< "$all"
       fi
       older <<< "$labelled" | awk '{ print $1, $2 }'
     } | sort -u
