@@ -38,6 +38,12 @@ jobs:
       - name: Yaml Lint
         run: yamllint -f colored scenarios .gitea examples
 
+      # The runner image has no ruff or flake8: compile the script and run its fixture tests (real ansible-playbook runs)
+      - name: Check scripts
+        run: |
+          python3 -m py_compile scripts/infra-spec-check.py scripts/tests/test_infra_spec_check.py
+          python3 -m unittest discover -v scripts/tests
+
       # The runner image's shellcheck checks the run: blocks; .gitea/actionlint.yaml holds the
       # Gitea runner labels and ignores the full-URL uses: form Gitea supports
       - name: Install actionlint
