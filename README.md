@@ -79,7 +79,7 @@ Uses the official `molecule-plugins` ec2 driver (`create.yml`/`destroy.yml` are 
 and the restricted CI user come from [Infrastructure/aws-molecule](https://git.msqu.de/Infrastructure/aws-molecule).
 - Secrets `MOLECULE_AWS_ACCESS_KEY_ID` / `MOLECULE_AWS_SECRET_ACCESS_KEY` (outputs of that repo)
 - `INSTANCE_SIZE` default `t3.small` (amd64); Graviton types (`t4g.*`) select arm64 images
-- The workflow derives `EC2_IMAGE_OWNER`/`EC2_IMAGE_NAME` from the distro (official Debian and Canonical images)
+- The workflow derives `EC2_IMAGE_OWNER`/`EC2_IMAGE_NAME` from the distro (official Debian images)
   and picks `EC2_SUBNET_ID` by tag; every job creates and terminates its own instance
 - Instances are tagged `managed-by=molecule`, `project=<repo>`; the cleanup job terminates leftovers of the
   repo and any molecule instance older than 3 hours (see Cloud sweep)
@@ -227,7 +227,8 @@ The role workflows' cleanup jobs run the same script for their repo.
   while the platform's server exists), then the DynDNS records `*.<subdomain>` (A, AAAA) of the zone `picxi.de`
   (`MOLECULE_DNS_ZONE`, `molecule_ddns.domain` in Infrastructure/infra) whose subdomain has no `molecule-<subdomain>`
   server left. The zone is the CI-only zone of Infrastructure/dns; records have no age, so a record without a
-  server counts as leftover. The record deletion uses `HETZNER_DNS_TOKEN` (Cloud API token of the project that
+  server counts as leftover. A role must therefore keep the default subdomain (the repo name) and not set its
+  own `molecule_ddns_subdomain`. The record deletion uses `HETZNER_DNS_TOKEN` (Cloud API token of the project that
   holds the zone) and is skipped when that secret is not passed.
 - Secrets: `HCLOUD_TOKEN`, `HETZNER_DNS_TOKEN`, `VULTR_API_KEY`, `MOLECULE_AWS_ACCESS_KEY_ID`,
   `MOLECULE_AWS_SECRET_ACCESS_KEY`; org-level Actions secrets of the CICD org (Infrastructure/gitea,

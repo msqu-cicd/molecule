@@ -99,20 +99,22 @@ sweep_hetzner() {
   if [ -z "$zone" ] || [ -z "${HETZNER_DNS_TOKEN:-}" ]; then
     echo "DynDNS records: skipped (MOLECULE_DNS_ZONE or HETZNER_DNS_TOKEN not set)"
   else
-    sweep_hetzner_dns "$zone" "$all" "$gone"
+    sweep_hetzner_dns "$zone" "$gone"
   fi
 }
 
 # DynDNS records of dyndns.yml: *.<subdomain>, A and AAAA, subdomain = repo name (the servers are
 # molecule-<subdomain>[-nodeN]). A record without a server of that name is a leftover: the role-side
-# cleanup is opt-in and does not run after a cancel. $1 zone, $2 the servers (id name) from before the
-# deletions, $3 the ones deleted (they count as gone, also in a dry run).
+# cleanup is opt-in and does not run after a cancel. $1 zone, $2 the servers (id name) deleted above
+# (they count as gone, also in a dry run).
 sweep_hetzner_dns() {
-  local zone=$1 all=$2 gone=$3 live records name type sub
-  live=$(awk 'NR == FNR { g[$1] = 1; next } !($1 in g) && $2 ~ /^molecule-/ { n = $2; sub(/^molecule-/, "", n); sub(/-node[0-9]+$/, "", n); print n }' \
-    <(printf '%s\n' "$gone") <(printf '%s\n' "$all") | sort -u)
+  local zone=$1 gone=$2 all live records name type sub
   # the zone may live in another project than the servers
   records=$(HCLOUD_TOKEN="$HETZNER_DNS_TOKEN" hcloud zone rrset list "$zone" --type A --type AAAA -o noheader -o columns=name,type)
+  # servers listed after the records: dyndns.yml runs after create, so a listed record's server is listed too
+  all=$(hcloud server list -o noheader -o columns=id,name)
+  live=$(awk 'NR == FNR { g[$1] = 1; next } !($1 in g) && $2 ~ /^molecule-/ { n = $2; sub(/^molecule-/, "", n); sub(/-node[0-9]+$/, "", n); print n }' \
+    <(printf '%s\n' "$gone") <(printf '%s\n' "$all") | sort -u)
   echo "DynDNS records in $zone without a molecule server"
   while read -r name type; do
     case $name in
