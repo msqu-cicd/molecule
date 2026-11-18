@@ -119,6 +119,20 @@
           until: ec2_instances is finished
           retries: 300
 
+        # Without the run config the run id is new and the filter above matches nothing
+        - name: Destroy the instances of the instance config
+          when:
+            - not run_config_stat.stat.exists
+            - instance_config | length != 0
+          amazon.aws.ec2_instance:
+            profile: "{{ item.aws_profile | default(omit) }}"
+            region: "{{ item.region | default(omit) }}"
+            instance_ids: "{{ instance_config | map(attribute='instance_ids') | flatten }}"
+            state: absent
+          loop: "{{ platforms }}"
+          loop_control:
+            label: "{{ item.name }}"
+
         - name: Destroy ephemeral security groups (if needed)
           amazon.aws.ec2_security_group:
             profile: "{{ item.aws_profile | default(omit) }}"

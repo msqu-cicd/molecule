@@ -59,8 +59,8 @@
             generated_public_ssh_key: "{{ lookup('ansible.builtin.file', ssh_id_path + '.pub') | trim }}"
 
         # The same key may already be registered under another name, and Hetzner
-        # accepts a public key once per project: use that name instead of creating
-        # the key as "molecule"
+        # accepts a public key once per project: use that name. A missing key is
+        # registered under a name derived from it, so no other key's name collides
         - name: Look for the key in the project
           hetzner.hcloud.ssh_key_info:
             api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_TOKEN') }}"
@@ -72,7 +72,7 @@
           block:
             - name: Register SSH key for test instance(s)
               hetzner.hcloud.ssh_key:
-                name: molecule
+                name: "molecule-{{ (generated_public_ssh_key.split()[1] | ansible.builtin.hash('sha256'))[:12] }}"
                 public_key: "{{ generated_public_ssh_key }}"
                 api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_TOKEN') }}"
                 state: present
