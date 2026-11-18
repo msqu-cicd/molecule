@@ -1,4 +1,5 @@
-# Reusable molecule workflow for Ansible roles (vultr scenario).
+# Reusable molecule workflow for Ansible roles (vultr scenario). Pushes to the default branch run
+# lint, infra-spec and the secret scan only, so they start no Vultr instance.
 # Called from each role's .gitea/workflows/molecule.yml; see README.md for the caller template.
 name: Molecule (vultr)
 
@@ -145,17 +146,32 @@ jobs:
     container:
       image: ghcr.io/msqu-devops/molecule:runner@sha256:48a43e05780540f368aa82b3a57218d59b73ea042a21eeb967837a49e9c20da6
     steps:
+      # A pull request is scanned commit by commit, so a secret added and removed again inside it is
+      # found (full history, so the base commit resolves); a push or dispatch scans the checked-out tree.
       - name: Checkout repository
         uses: https://github.com/actions/checkout@v7
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Gitleaks
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_REF: ${{ github.base_ref }}
         run: |
           config=$(mktemp)
           printf '[extend]\nuseDefault = true\n' > "$config"
           rm -f .gitleaksignore
-          gitleaks dir . --config "$config" --ignore-gitleaks-allow --redact --no-banner
+          if [ "$EVENT_NAME" = pull_request ]; then
+            # the commits of the pull request: reachable from its head, not from the target branch
+            base=${BASE_SHA:-origin/$BASE_REF}
+            git rev-parse --verify --quiet "$base^{commit}" > /dev/null || { echo "Cannot resolve the pull request base '$base'" >&2; exit 1; }
+            echo "Scanning the commits $base..HEAD"
+            gitleaks git --log-opts="$base..HEAD" --config "$config" --ignore-gitleaks-allow --redact --no-banner .
+          else
+            gitleaks dir . --config "$config" --ignore-gitleaks-allow --redact --no-banner
+          fi
 
   # The role's argument specs and asserts against the real infra inventories: every host an infra
   # playbook applies the role to, local connection, no test server (scripts/infra-spec-check.py).
@@ -223,7 +239,7 @@ jobs:
     container:
       image: ghcr.io/msqu-devops/molecule:runner@sha256:48a43e05780540f368aa82b3a57218d59b73ea042a21eeb967837a49e9c20da6
     needs: [changes, lint]
-    if: (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true')
+    if: (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && github.event_name != 'push'
     env:
       TEST_TYPE: integration
       VULTR_SERVER_STATE: present
@@ -267,6 +283,7 @@ jobs:
           token: '${{ secrets.CI_RUNNER_PAT }}'
           path: git_infra
           ref: main
+          persist-credentials: false
           sparse-checkout: |
             group_vars/
 
@@ -278,13 +295,16 @@ jobs:
           token: '${{ secrets.CI_RUNNER_PAT }}'
           path: git_molecule
           ref: ${{ inputs.molecule_ref }}
+          persist-credentials: false
           sparse-checkout: |
             scenarios/vultr
 
       - name: Prepare Ansible Vault
         env:
           ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
-        run: printf '%s\n' "$ANSIBLE_VAULT_PASSWORD" > "$GITHUB_WORKSPACE/.vault"
+        run: |
+          umask 077
+          printf '%s\n' "$ANSIBLE_VAULT_PASSWORD" > "$GITHUB_WORKSPACE/.vault"
 
       - name: Setup molecule scenario
         run: |
@@ -320,7 +340,6 @@ jobs:
           MOLECULE_DEBUG: ${{ inputs.molecule_debug }}
           PY_COLORS: '1'
           VULTR_API_KEY: ${{ secrets.VULTR_API_KEY }}
-          ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
 
       - name: Cleanup workspace
         if: always()
@@ -330,14 +349,16 @@ jobs:
           shopt -s dotglob
           rm -rf ./*
 
-  # Runs after all test jobs, also after failures and cancellations: deletes leftover servers
-  # (and, via the role's cleanup.yml, their DNS records) instead of leaving them stopped.
-  # Skips with the tests (nothing relevant changed, or a push its pull request already tested).
+  # Runs after all test jobs, also after failures and cancellations. The integration job leaves its
+  # instance (VULTR_SERVER_STATE=present), so this job is what deletes it: molecule destroy, then a
+  # sweep of this repo's instances and every molecule instance older than 3 hours
+  # (scripts/cloud-sweep.sh). Skips with the tests: nothing relevant changed, or a push. A run that is
+  # force-cancelled never gets here: .gitea/workflows/cloud-sweep.yml runs the sweep on a schedule.
   molecule-cleanup:
     runs-on: molecule
     container:
       image: ghcr.io/msqu-devops/molecule:runner@sha256:48a43e05780540f368aa82b3a57218d59b73ea042a21eeb967837a49e9c20da6
-    if: always() && (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true')
+    if: always() && github.event_name != 'push' && (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true')
     needs: [changes, molecule-integration]
     env:
       MOLECULE_SCENARIO_NAME: vultr
@@ -380,13 +401,17 @@ jobs:
           token: '${{ secrets.CI_RUNNER_PAT }}'
           path: git_molecule
           ref: ${{ inputs.molecule_ref }}
+          persist-credentials: false
           sparse-checkout: |
             scenarios/vultr
+            scripts
 
       - name: Prepare Ansible Vault
         env:
           ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
-        run: printf '%s\n' "$ANSIBLE_VAULT_PASSWORD" > "$GITHUB_WORKSPACE/.vault"
+        run: |
+          umask 077
+          printf '%s\n' "$ANSIBLE_VAULT_PASSWORD" > "$GITHUB_WORKSPACE/.vault"
 
       - name: Setup molecule scenario
         run: |
@@ -400,27 +425,13 @@ jobs:
         run: molecule destroy || echo "Cleanup failed or no resources to destroy"
         env:
           VULTR_API_KEY: ${{ secrets.VULTR_API_KEY }}
-          ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
 
-      - name: Cleanup orphaned Vultr resources
-        continue-on-error: true
+      # Fails when the API cannot be queried or a deletion fails; unlike the destroy above it is not
+      # allowed to pass silently
+      - name: Sweep leftover cloud resources
         env:
           VULTR_API_KEY: ${{ secrets.VULTR_API_KEY }}
-        run: |
-          echo "Checking for orphaned Vultr resources..."
-          # Fail loudly if the API cannot be queried instead of reporting "nothing found"
-          ALL_INSTANCES=$(vultr-cli instance list --output json)
-          INSTANCE_LIST=$(echo "$ALL_INSTANCES" | jq -r --arg label "molecule-${CI_PROJECT_NAME_MOLECULE}" '.instances[]? | select(.label == $label) | .id')
-          if [ -n "$INSTANCE_LIST" ]; then
-            echo "Found orphaned instances:"
-            echo "$INSTANCE_LIST"
-            echo "$INSTANCE_LIST" | while read -r instance_id; do
-              echo "Deleting instance: $instance_id"
-              vultr-cli instance delete "$instance_id" || echo "Failed to delete $instance_id"
-            done
-          else
-            echo "No orphaned instances found"
-          fi
+        run: SWEEP_PROJECT="$CI_PROJECT_NAME_MOLECULE" bash git_molecule/scripts/cloud-sweep.sh vultr
 
       - name: Cleanup workspace
         if: always()

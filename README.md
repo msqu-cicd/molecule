@@ -30,7 +30,8 @@ Optimized molecule scenario for Hetzner Cloud infrastructure testing with the fo
 
 ### Resource Management
 - All platforms in `molecule.yml` are created, so roles can define multi-node scenarios
-- Servers are stopped between CI jobs and rebuilt by the next job; the last job deletes them
+- Servers are stopped between CI jobs and rebuilt by the next job; the last job deletes them (the cleanup job and
+  the Cloud sweep also remove strays, volumes, networks and DynDNS records)
 - Automatic cleanup of all resources after testing
 - Labels applied: `environment: molecule`, `project: <project-name>`, `managed-by: molecule`; the cleanup
   job's safety net selects old servers by `managed-by=molecule`, so a role's own `molecule.yml` must keep that label
@@ -68,7 +69,8 @@ TCG (works, but slow) without it.
 
 Used by roles that need distributions Hetzner does not offer (Arch Linux workstations).
 - `VULTR_API_KEY` (required), `INSTANCE_SIZE` (default `vhp-1c-1gb-amd`, 1 vCPU, 1 GB, 25 GB NVMe; `vc2-1c-1gb` is no longer offered in `fra`), `INSTANCE_REGION` (default `fra`)
-- Instances are labelled `molecule-<repo>`, without a VPC (the single test instance needs no private network)
+- Instances are labelled `molecule-<repo>`, without a VPC (the single test instance needs no private network).
+  `molecule test` leaves the instance (`VULTR_SERVER_STATE=present`); the workflow's cleanup job and the Cloud sweep delete it
 
 ## EC2
 
@@ -77,10 +79,10 @@ Uses the official `molecule-plugins` ec2 driver (`create.yml`/`destroy.yml` are 
 and the restricted CI user come from [Infrastructure/aws-molecule](https://git.msqu.de/Infrastructure/aws-molecule).
 - Secrets `MOLECULE_AWS_ACCESS_KEY_ID` / `MOLECULE_AWS_SECRET_ACCESS_KEY` (outputs of that repo)
 - `INSTANCE_SIZE` default `t3.small` (amd64); Graviton types (`t4g.*`) select arm64 images
-- The workflow derives `EC2_IMAGE_OWNER`/`EC2_IMAGE_NAME` from the distro (official Debian and Canonical images)
+- The workflow derives `EC2_IMAGE_OWNER`/`EC2_IMAGE_NAME` from the distro (official Debian images)
   and picks `EC2_SUBNET_ID` by tag; every job creates and terminates its own instance
 - Instances are tagged `managed-by=molecule`, `project=<repo>`; the cleanup job terminates leftovers of the
-  repo and any molecule instance older than 3 hours
+  repo and any molecule instance older than 3 hours (see Cloud sweep)
 
 ## Shared DynDNS (hetznercloud)
 
@@ -124,7 +126,7 @@ For roles the kvm runner cannot test, e.g. multi-node scenarios whose servers mu
 | `force_run` | `'false'` | Run even if only ignored files changed |
 | `molecule_debug` | `'false'` | Open a tmate session before the tests |
 | `args` | `''` | Extra `molecule test` arguments |
-| `unit` / `integration` | `'true'` | Switch the unit / integration jobs (both `'false'` = lint only) |
+| `unit` / `integration` | `'true'` | Switch the unit / integration jobs (both `'false'` = lint, infra-spec and secret scan only) |
 | `debian_distro` | `debian-13` | Hetzner image |
 | `instance_size` | scenario default | Server type |
 | `extra_files_ignore` | `''` | Additional changed-files ignore patterns |
@@ -132,11 +134,14 @@ For roles the kvm runner cannot test, e.g. multi-node scenarios whose servers mu
 
 Secrets: `SSH_PRIVATE_KEY`, `CI_RUNNER_PAT`, `CI_RUNNER_PAT_GITHUB`, `ANSIBLE_VAULT_PASSWORD`, `HCLOUD_TOKEN`, `HETZNER_DNS_TOKEN`.
 
-`role-ec2.yml` has the hetznercloud inputs plus `region` (default `eu-central-1`); its Debian and Ubuntu
-chains run in parallel and it takes `MOLECULE_AWS_ACCESS_KEY_ID`/`MOLECULE_AWS_SECRET_ACCESS_KEY` instead of the Hetzner secrets.
+`role-ec2.yml` has the hetznercloud inputs plus `region` (default `eu-central-1`) and takes
+`MOLECULE_AWS_ACCESS_KEY_ID`/`MOLECULE_AWS_SECRET_ACCESS_KEY` instead of the Hetzner secrets. Like the others it is
+Debian only and has the infra-spec job. Its only caller is Ansible/apt (`molecule-ec2.yml`, manual dispatch).
 
 `role-vultr.yml` has the same inputs except `unit`/`integration`/`*_distro` (it runs one integration job,
-`distro` defaults to `Arch Linux x64`) and takes `VULTR_API_KEY` instead of the Hetzner secrets.
+`distro` defaults to `Arch Linux x64`) and takes `VULTR_API_KEY` instead of the Hetzner secrets. The integration
+job leaves its instance (`VULTR_SERVER_STATE=present`), so the cleanup job is what deletes it. Callers: the
+`desktop-config*` roles and `workstation`.
 
 ### role-kvm.yml
 
@@ -162,18 +167,28 @@ becomes `kvm_memory` (default `'2048'`) and `kvm_vcpus` (`'2'`); `debian_distro`
      It fails when a spec or assert rejects a value infra sets; errors name the variable and the type, never the value.
 3. **unit** (Debian 13): role with `tests/vars.yml`
 4. **integration** (Debian 13): role with the infra `group_vars`
-5. **cleanup** (hetznercloud only; always, also after failures/cancellations): deletes leftover servers and
-   DNS records, then a safety net deletes servers labelled `managed-by=molecule` of any repo older than 3 hours.
-   `role-vultr.yml` has its own cleanup job, which skips whenever its integration test skips.
+5. **cleanup** (hetznercloud, vultr and ec2; always, also after failures/cancellations, but not when the tests
+   were skipped because nothing relevant changed or on a push): `molecule destroy` (its failure is tolerated),
+   then `scripts/cloud-sweep.sh` for the cloud. The sweep deletes the repo's own leftovers and every molecule
+   resource older than 3 hours, and fails the job when the API cannot be queried or a deletion fails. On Hetzner
+   it also removes the unattached volumes and unused networks labelled `managed-by=molecule` and the DynDNS
+   records (see Cloud sweep). `role-kvm.yml` has no cleanup job because the guests die with the job container.
 
-Outside that order, with no `needs`, **secret-scan** runs gitleaks over the checked-out tree on every pull
-request, whatever it changed, and on every push the caller's `paths-ignore` lets through. It uses gitleaks'
-built-in rules only: a `.gitleaks.toml`, `.gitleaksignore` or `gitleaks:allow` in the role is ignored, so a
-change cannot switch the scan off. Findings are redacted in the log.
+Outside that order, with no `needs`, **secret-scan** runs gitleaks on every pull request, whatever it changed,
+and on every push the caller's `paths-ignore` lets through. A pull request is scanned commit by commit
+(`gitleaks git`, `base..HEAD` over the full history), so a secret that is added and removed again inside it is
+found; a push or dispatch scans the checked-out tree. It uses gitleaks' built-in rules only: a `.gitleaks.toml`,
+`.gitleaksignore` or `gitleaks:allow` in the role is ignored, so a change cannot switch the scan off. Findings
+are redacted in the log.
+
+Secrets: the scenarios read the vault through `vault_password_file` (`.vault`, written with `umask 077`), so the
+molecule steps get no `ANSIBLE_VAULT_PASSWORD` in their environment, and the scenario and infra checkouts do not
+leave `CI_RUNNER_PAT` in `.git/config`.
 
 The fleet runs Debian 13 only, so there are no Ubuntu jobs. Pushes to the default branch (merges, already
-tested in their pull request) skip the integration test: `role-kvm.yml` runs lint and the unit test,
-`role-hetznercloud.yml` lint only, so a merge starts no Hetzner server.
+tested in their pull request) skip the integration test and, on the cloud workflows, the unit test too: lint,
+infra-spec and the secret scan run everywhere, plus the unit test in `role-kvm.yml`. A merge therefore starts no
+Hetzner server, Vultr or EC2 instance.
 
 A push that its pull request already tested skips lint and tests entirely: the `changes` job checks whether
 the pushed commit is a merge whose tree equals the pull request head (the pull request was up to date with
@@ -190,10 +205,35 @@ Runs of one repo share the concurrency group `molecule-tests`, because the serve
   yamllint and actionlint (pinned, checksum-verified; it shellchecks the `run:` blocks). `.gitea/actionlint.yaml`
   lists the Gitea runner labels and ignores the full-URL `uses:` form that Gitea supports and GitHub syntax lacks.
   A `run:` block that relies on word splitting on purpose carries `# shellcheck disable=SC2086` with the reason.
-- `smoke-test.yml` runs the full Ansible/apt pipeline against the scenarios of the pushed ref
-  (`molecule_ref`) whenever `scenarios/**` changes, and fails if apt fails. A newer push queues behind a
-  running smoke test instead of cancelling it; a smoke test cancelled by hand leaves the apt run running.
+- `smoke-test.yml` runs the full Ansible/apt pipeline against the scenarios of the pushed commit
+  (`molecule_ref` is the head SHA, not a branch name) whenever `scenarios/**` changes, and fails if apt fails.
+  A newer push queues behind a running smoke test instead of cancelling it; a smoke test cancelled by hand
+  leaves the apt run running. It does not exercise a changed `role-*.yml`: the apt caller uses
+  `role-kvm.yml@main`, and `uses:` takes no expression, so a workflow change is only linted (actionlint) before it
+  merges. Gitea's runner would run `uses: ./.gitea/workflows/role-kvm.yml` from this repository, but the
+  workflows treat the repository root as the role (lint, `molecule/default`, the role named after the directory),
+  so a PR-time test needs a role at the root of this repository or a `role_dir` input in the workflows.
 - The runner image is pinned by digest in the workflows; Renovate updates it.
+
+## Cloud sweep
+
+`cloud-sweep.yml` runs `scripts/cloud-sweep.sh` for Hetzner, Vultr and EC2 every two hours and on dispatch
+(`dry_run`, `max_age_hours`), independent of any role run. A force-cancelled run, or one cancelled before it
+started, skips its `always()` cleanup job, and Hetzner servers stay `stopped` between jobs by design; the sweep
+deletes what is older than 3 hours (`managed-by=molecule` on Hetzner and EC2, the `molecule-` label on Vultr).
+The role workflows' cleanup jobs run the same script for their repo.
+
+- Hetzner: servers, then the unattached volumes and the networks without servers (`destroy.yml` removes them only
+  while the platform's server exists), then the DynDNS records `*.<subdomain>` (A, AAAA) of the zone `picxi.de`
+  (`MOLECULE_DNS_ZONE`, `molecule_ddns.domain` in Infrastructure/infra) whose subdomain has no `molecule-<subdomain>`
+  server left. The zone is the CI-only zone of Infrastructure/dns; records have no age, so a record without a
+  server counts as leftover. A role must therefore keep the default subdomain (the repo name) and not set its
+  own `molecule_ddns_subdomain`. The record deletion uses `HETZNER_DNS_TOKEN` (Cloud API token of the project that
+  holds the zone) and is skipped when that secret is not passed.
+- Secrets: `HCLOUD_TOKEN`, `HETZNER_DNS_TOKEN`, `VULTR_API_KEY`, `MOLECULE_AWS_ACCESS_KEY_ID`,
+  `MOLECULE_AWS_SECRET_ACCESS_KEY`; org-level Actions secrets of the CICD org (Infrastructure/gitea,
+  `3_ci_stuff/org_secrets.tf`).
+- `SWEEP_DRY_RUN=true scripts/cloud-sweep.sh <hetzner|vultr|ec2>` prints what would be deleted.
 
 ## Local runs
 
@@ -204,8 +244,9 @@ INSTANCE_SIZE=cx33 molecule test           # different server type
 MOLECULE_DISTRO=debian-13 KVM_IMAGE_CACHE=~/.cache/molecule-images molecule test   # kvm scenario, needs /dev/kvm
 ```
 
-`examples/Makefile` copies a scenario (`DRIVER`, default `kvm`) into a role and runs molecule with the same
-environment as CI. It is the copy every role repository carries. `make converge` keeps the instance and its molecule
+`examples/Makefile` copies a scenario (`DRIVER`, default `kvm`; `MOLECULE_REF`, default `main`, a branch, tag or
+commit of this repository) into a role and runs molecule with the same environment as CI. `make shellcheck`
+checks what CI's Shell Lint checks. It is the copy every role repository carries. `make converge` keeps the instance and its molecule
 state in `~/.cache/molecule-make/<repo>` (mode 0700) for `make verify`, `make login` and `make destroy`; `make test`
 and `make destroy` remove the state and the scenario files the Makefile copied in, also when molecule fails.
 Only files that did not exist before the copy are removed (the cache directory lists them), and never files

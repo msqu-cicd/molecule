@@ -1,0 +1,92 @@
+# Deletes molecule test resources that the role runs left behind, independent of any run: a run that
+# is force-cancelled (or cancelled before it started) never reaches its cleanup job, and Hetzner
+# servers stay `stopped` between jobs by design. Every molecule resource older than the limit goes
+# (scripts/cloud-sweep.sh), the same sweep the role workflows run in their cleanup jobs.
+name: Cloud sweep
+
+on:
+  schedule:
+    - cron: '17 */2 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Only print what would be deleted ('true'/'false')
+        type: string
+        default: 'false'
+      max_age_hours:
+        description: Delete molecule resources older than this many hours
+        type: string
+        default: '3'
+
+permissions:
+  contents: read
+
+# a sweep that is still running makes the next one wait instead of racing it
+concurrency:
+  group: cloud-sweep
+  cancel-in-progress: false
+
+env:
+  SWEEP_DRY_RUN: ${{ inputs.dry_run || 'false' }}
+  SWEEP_MAX_AGE_HOURS: ${{ inputs.max_age_hours || '3' }}
+
+jobs:
+  hetzner:
+    runs-on: molecule
+    container:
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:48a43e05780540f368aa82b3a57218d59b73ea042a21eeb967837a49e9c20da6
+    timeout-minutes: 20
+    env:
+      # the CI-only zone of the DynDNS records (molecule_ddns.domain in Infrastructure/infra, group_vars/all/homelab/cicd/molecule.yml)
+      MOLECULE_DNS_ZONE: picxi.de
+    steps:
+      - name: Checkout repository
+        uses: https://github.com/actions/checkout@v7
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            scripts
+
+      - name: Sweep Hetzner
+        env:
+          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+          HETZNER_DNS_TOKEN: ${{ secrets.HETZNER_DNS_TOKEN }}
+        run: bash scripts/cloud-sweep.sh hetzner
+
+  vultr:
+    runs-on: molecule
+    container:
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:48a43e05780540f368aa82b3a57218d59b73ea042a21eeb967837a49e9c20da6
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: https://github.com/actions/checkout@v7
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            scripts
+
+      - name: Sweep Vultr
+        env:
+          VULTR_API_KEY: ${{ secrets.VULTR_API_KEY }}
+        run: bash scripts/cloud-sweep.sh vultr
+
+  ec2:
+    runs-on: molecule
+    container:
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:48a43e05780540f368aa82b3a57218d59b73ea042a21eeb967837a49e9c20da6
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: https://github.com/actions/checkout@v7
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            scripts
+
+      - name: Sweep EC2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.MOLECULE_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.MOLECULE_AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: eu-central-1
+        run: bash scripts/cloud-sweep.sh ec2

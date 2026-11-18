@@ -1,8 +1,8 @@
 # Reusable molecule workflow for Ansible roles (kvm scenario: QEMU guests inside the job
 # container on the `kvm` runner, no cloud account involved), Debian only; the default for roles.
 # Same inputs as role-hetznercloud.yml except instance_size, which becomes kvm_memory/kvm_vcpus.
-# Pushes to the default branch (merges, already tested in their pull request) run lint and the
-# unit test only.
+# Pushes to the default branch (merges, already tested in their pull request) skip the integration
+# test: lint, infra-spec, the secret scan and the unit test run.
 # Called from each role's .gitea/workflows/molecule.yml; see README.md for the caller template.
 name: Molecule (kvm)
 
@@ -164,17 +164,32 @@ jobs:
     container:
       image: ghcr.io/msqu-devops/molecule:runner@sha256:48a43e05780540f368aa82b3a57218d59b73ea042a21eeb967837a49e9c20da6
     steps:
+      # A pull request is scanned commit by commit, so a secret added and removed again inside it is
+      # found (full history, so the base commit resolves); a push or dispatch scans the checked-out tree.
       - name: Checkout repository
         uses: https://github.com/actions/checkout@v7
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Gitleaks
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_REF: ${{ github.base_ref }}
         run: |
           config=$(mktemp)
           printf '[extend]\nuseDefault = true\n' > "$config"
           rm -f .gitleaksignore
-          gitleaks dir . --config "$config" --ignore-gitleaks-allow --redact --no-banner
+          if [ "$EVENT_NAME" = pull_request ]; then
+            # the commits of the pull request: reachable from its head, not from the target branch
+            base=${BASE_SHA:-origin/$BASE_REF}
+            git rev-parse --verify --quiet "$base^{commit}" > /dev/null || { echo "Cannot resolve the pull request base '$base'" >&2; exit 1; }
+            echo "Scanning the commits $base..HEAD"
+            gitleaks git --log-opts="$base..HEAD" --config "$config" --ignore-gitleaks-allow --redact --no-banner .
+          else
+            gitleaks dir . --config "$config" --ignore-gitleaks-allow --redact --no-banner
+          fi
 
   # The role's argument specs and asserts against the real infra inventories: every host an infra
   # playbook applies the role to, local connection, no test server (scripts/infra-spec-check.py).
@@ -291,13 +306,16 @@ jobs:
           token: '${{ secrets.CI_RUNNER_PAT }}'
           path: git_molecule
           ref: ${{ inputs.molecule_ref }}
+          persist-credentials: false
           sparse-checkout: |
             scenarios/kvm
 
       - name: Prepare Ansible Vault
         env:
           ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
-        run: printf '%s\n' "$ANSIBLE_VAULT_PASSWORD" > "$GITHUB_WORKSPACE/.vault"
+        run: |
+          umask 077
+          printf '%s\n' "$ANSIBLE_VAULT_PASSWORD" > "$GITHUB_WORKSPACE/.vault"
 
       - name: Setup molecule scenario
         run: |
@@ -344,7 +362,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.CI_RUNNER_PAT_GITHUB }}
           MOLECULE_DEBUG: ${{ inputs.molecule_debug }}
           PY_COLORS: '1'
-          ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
 
       - name: Cleanup workspace
         if: always()
@@ -408,6 +425,7 @@ jobs:
           token: '${{ secrets.CI_RUNNER_PAT }}'
           path: git_infra
           ref: main
+          persist-credentials: false
           sparse-checkout: |
             group_vars/
 
@@ -419,13 +437,16 @@ jobs:
           token: '${{ secrets.CI_RUNNER_PAT }}'
           path: git_molecule
           ref: ${{ inputs.molecule_ref }}
+          persist-credentials: false
           sparse-checkout: |
             scenarios/kvm
 
       - name: Prepare Ansible Vault
         env:
           ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
-        run: printf '%s\n' "$ANSIBLE_VAULT_PASSWORD" > "$GITHUB_WORKSPACE/.vault"
+        run: |
+          umask 077
+          printf '%s\n' "$ANSIBLE_VAULT_PASSWORD" > "$GITHUB_WORKSPACE/.vault"
 
       - name: Setup molecule scenario
         run: |
@@ -468,7 +489,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.CI_RUNNER_PAT_GITHUB }}
           MOLECULE_DEBUG: ${{ inputs.molecule_debug }}
           PY_COLORS: '1'
-          ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
 
       - name: Cleanup workspace
         if: always()

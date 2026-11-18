@@ -1,4 +1,5 @@
-# Reusable molecule workflow for Ansible roles (ec2 scenario).
+# Reusable molecule workflow for Ansible roles (ec2 scenario), Debian only. Pushes to the default
+# branch run lint, infra-spec and the secret scan only, so they start no EC2 instance.
 # Called from each role's .gitea/workflows/molecule.yml; see README.md for the caller template.
 name: Molecule (ec2)
 
@@ -29,10 +30,6 @@ on:
         description: Debian release for the Debian jobs (debian-<version>)
         type: string
         default: debian-13
-      ubuntu_distro:
-        description: Ubuntu release for the Ubuntu jobs (ubuntu-<version>)
-        type: string
-        default: ubuntu-26.04
       region:
         description: AWS region of the Infrastructure/aws-molecule network
         type: string
@@ -163,24 +160,100 @@ jobs:
     container:
       image: ghcr.io/msqu-devops/molecule:runner@sha256:48a43e05780540f368aa82b3a57218d59b73ea042a21eeb967837a49e9c20da6
     steps:
+      # A pull request is scanned commit by commit, so a secret added and removed again inside it is
+      # found (full history, so the base commit resolves); a push or dispatch scans the checked-out tree.
+      - name: Checkout repository
+        uses: https://github.com/actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Gitleaks
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          config=$(mktemp)
+          printf '[extend]\nuseDefault = true\n' > "$config"
+          rm -f .gitleaksignore
+          if [ "$EVENT_NAME" = pull_request ]; then
+            # the commits of the pull request: reachable from its head, not from the target branch
+            base=${BASE_SHA:-origin/$BASE_REF}
+            git rev-parse --verify --quiet "$base^{commit}" > /dev/null || { echo "Cannot resolve the pull request base '$base'" >&2; exit 1; }
+            echo "Scanning the commits $base..HEAD"
+            gitleaks git --log-opts="$base..HEAD" --config "$config" --ignore-gitleaks-allow --redact --no-banner .
+          else
+            gitleaks dir . --config "$config" --ignore-gitleaks-allow --redact --no-banner
+          fi
+
+  # The role's argument specs and asserts against the real infra inventories: every host an infra
+  # playbook applies the role to, local connection, no test server (scripts/infra-spec-check.py).
+  infra-spec:
+    runs-on: molecule
+    container:
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:48a43e05780540f368aa82b3a57218d59b73ea042a21eeb967837a49e9c20da6
+    needs: [changes, lint]
+    if: needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true'
+    steps:
+      # Role code from the change runs in this job: no checkout keeps its token in .git/config
       - name: Checkout repository
         uses: https://github.com/actions/checkout@v7
         with:
           persist-credentials: false
 
-      - name: Gitleaks
+      - name: Checkout infra repository
+        uses: https://github.com/actions/checkout@v7
+        with:
+          github-server-url: https://git.msqu.de
+          repository: infrastructure/infra
+          token: '${{ secrets.CI_RUNNER_PAT }}'
+          path: git_infra
+          ref: main
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /group_vars/
+            /host_vars/
+            /inventories/
+            /*.yml
+
+      - name: Checkout the check script
+        uses: https://github.com/actions/checkout@v7
+        with:
+          github-server-url: https://git.msqu.de
+          repository: cicd/molecule
+          token: '${{ secrets.CI_RUNNER_PAT }}'
+          path: git_molecule
+          ref: ${{ inputs.molecule_ref }}
+          persist-credentials: false
+          sparse-checkout: |
+            scripts
+
+      - name: Check the role against the infra inventories
+        env:
+          ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
         run: |
-          config=$(mktemp)
-          printf '[extend]\nuseDefault = true\n' > "$config"
-          rm -f .gitleaksignore
-          gitleaks dir . --config "$config" --ignore-gitleaks-allow --redact --no-banner
+          umask 077
+          printf '%s\n' "$ANSIBLE_VAULT_PASSWORD" > "$GITHUB_WORKSPACE/.vault"
+          unset ANSIBLE_VAULT_PASSWORD
+          export ANSIBLE_VAULT_PASSWORD_FILE="$GITHUB_WORKSPACE/.vault"
+          python3 git_molecule/scripts/infra-spec-check.py "$GITHUB_WORKSPACE" git_infra "${GITHUB_REPOSITORY#*/}"
+
+      - name: Cleanup workspace
+        if: always()
+        shell: bash
+        run: |
+          cd "${GITHUB_WORKSPACE}"
+          shopt -s dotglob
+          rm -rf ./*
 
   molecule-unit-debian:
     runs-on: molecule
     container:
       image: ghcr.io/msqu-devops/molecule:runner@sha256:48a43e05780540f368aa82b3a57218d59b73ea042a21eeb967837a49e9c20da6
     needs: [changes, lint]
-    if: (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && inputs.unit == 'true'
+    if: (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && inputs.unit == 'true' && github.event_name != 'push'
     env:
       TEST_TYPE: unit
       AWS_DEFAULT_REGION: ${{ inputs.region }}
@@ -225,13 +298,16 @@ jobs:
           token: '${{ secrets.CI_RUNNER_PAT }}'
           path: git_molecule
           ref: ${{ inputs.molecule_ref }}
+          persist-credentials: false
           sparse-checkout: |
             scenarios/ec2
 
       - name: Prepare Ansible Vault
         env:
           ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
-        run: printf '%s\n' "$ANSIBLE_VAULT_PASSWORD" > "$GITHUB_WORKSPACE/.vault"
+        run: |
+          umask 077
+          printf '%s\n' "$ANSIBLE_VAULT_PASSWORD" > "$GITHUB_WORKSPACE/.vault"
 
       - name: Setup molecule scenario
         run: |
@@ -258,7 +334,6 @@ jobs:
           case "$INSTANCE_SIZE" in *g.*|*gd.*|*gn.*) arch=arm64 ;; *) arch=amd64 ;; esac
           case "$MOLECULE_DISTRO" in
             debian-*) owner=136693071363; name="${MOLECULE_DISTRO}-${arch}-*" ;;
-            ubuntu-*) owner=099720109477; name="ubuntu/images/hvm-ssd-gp3/ubuntu-*-${MOLECULE_DISTRO#ubuntu-}-${arch}-server-*" ;;
             *) echo "Unsupported distro for ec2: $MOLECULE_DISTRO"; exit 1 ;;
           esac
           # Subnets come from Infrastructure/aws-molecule (tag molecule=true); spread jobs across zones
@@ -294,136 +369,6 @@ jobs:
           PY_COLORS: '1'
           AWS_ACCESS_KEY_ID: ${{ secrets.MOLECULE_AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.MOLECULE_AWS_SECRET_ACCESS_KEY }}
-          ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
-
-      - name: Cleanup workspace
-        if: always()
-        shell: bash
-        run: |
-          cd "${GITHUB_WORKSPACE}"
-          shopt -s dotglob
-          rm -rf ./*
-
-  molecule-unit-ubuntu:
-    runs-on: molecule
-    container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:48a43e05780540f368aa82b3a57218d59b73ea042a21eeb967837a49e9c20da6
-    needs: [changes, lint]
-    if: (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && inputs.unit == 'true'
-    env:
-      TEST_TYPE: unit
-      AWS_DEFAULT_REGION: ${{ inputs.region }}
-      INSTANCE_REGION: ${{ inputs.region }}
-      MOLECULE_DISTRO: ${{ inputs.ubuntu_distro }}
-      MOLECULE_SCENARIO_NAME: ec2
-      INSTANCE_SIZE: ${{ inputs.instance_size }}
-    steps:
-      - name: Checkout repository
-        uses: https://github.com/actions/checkout@v7
-
-      - name: Set environment variables
-        run: |
-          {
-            echo "CI_HOSTNAME=$(echo '${{ env.MOLECULE_DISTRO }}' | tr -dc '[:alnum:]\n\r' | tr '[:upper:]' '[:lower:]')"
-            echo "CI_PROJECT_NAME_MOLECULE=$(echo "${GITHUB_REPOSITORY#*/}" | tr '_' '-')"
-            echo "CI_PROJECT_DIR=$GITHUB_WORKSPACE"
-          } >> "$GITHUB_ENV"
-
-      - name: Configure SSH
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-        run: |
-          mkdir -p ~/.ssh/
-          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keygen -y -f ~/.ssh/id_ed25519 > ~/.ssh/id_ed25519.pub
-          echo "SSH Key Fingerprint: $(ssh-keygen -l -E md5 -f ~/.ssh/id_ed25519)"
-          ssh-keyscan -p 22222 git.msqu.de >> ~/.ssh/known_hosts 2>/dev/null || true
-          # test hosts get new host keys every run; git.msqu.de stays checked against the keyscan above
-          cat > ~/.ssh/config << EOF
-          Host * !git.msqu.de
-            StrictHostKeyChecking no
-            UserKnownHostsFile=/dev/null
-          EOF
-
-      - name: Checkout molecule scenarios
-        uses: https://github.com/actions/checkout@v7
-        with:
-          github-server-url: https://git.msqu.de
-          repository: cicd/molecule
-          token: '${{ secrets.CI_RUNNER_PAT }}'
-          path: git_molecule
-          ref: ${{ inputs.molecule_ref }}
-          sparse-checkout: |
-            scenarios/ec2
-
-      - name: Prepare Ansible Vault
-        env:
-          ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
-        run: printf '%s\n' "$ANSIBLE_VAULT_PASSWORD" > "$GITHUB_WORKSPACE/.vault"
-
-      - name: Setup molecule scenario
-        run: |
-          mkdir -p "${GITHUB_WORKSPACE}/molecule/default"
-          rsync -avzh --ignore-existing --ignore-errors \
-            git_molecule/scenarios/ec2/ \
-            "${GITHUB_WORKSPACE}/molecule/default/"
-
-      - name: Configure unit test variables
-        run: |
-          if [[ -f "${GITHUB_WORKSPACE}/tests/vars.yml" ]]; then
-            mkdir -p "${GITHUB_WORKSPACE}/molecule/default/group_vars/all/"
-            rsync -aP "${GITHUB_WORKSPACE}/tests/vars.yml" \
-              "${GITHUB_WORKSPACE}/molecule/default/group_vars/all/test_vars.yml"
-          fi
-
-      - name: Resolve EC2 image and subnet
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.MOLECULE_AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.MOLECULE_AWS_SECRET_ACCESS_KEY }}
-        run: |
-          set -euo pipefail
-          # Graviton families (t4g, m7g, ...) need arm64 images
-          case "$INSTANCE_SIZE" in *g.*|*gd.*|*gn.*) arch=arm64 ;; *) arch=amd64 ;; esac
-          case "$MOLECULE_DISTRO" in
-            debian-*) owner=136693071363; name="${MOLECULE_DISTRO}-${arch}-*" ;;
-            ubuntu-*) owner=099720109477; name="ubuntu/images/hvm-ssd-gp3/ubuntu-*-${MOLECULE_DISTRO#ubuntu-}-${arch}-server-*" ;;
-            *) echo "Unsupported distro for ec2: $MOLECULE_DISTRO"; exit 1 ;;
-          esac
-          # Subnets come from Infrastructure/aws-molecule (tag molecule=true); spread jobs across zones
-          subnet=$(python3 -c 'import boto3,random; s=boto3.client("ec2").describe_subnets(Filters=[{"Name":"tag:molecule","Values":["true"]}])["Subnets"]; print(random.choice(s)["SubnetId"])')
-          {
-            echo "EC2_IMAGE_OWNER=$owner"
-            echo "EC2_IMAGE_NAME=$name"
-            echo "EC2_SUBNET_ID=$subnet"
-          } >> "$GITHUB_ENV"
-          echo "image: $owner/$name ($arch), subnet: $subnet"
-
-      - name: Setup debugging session
-        if: inputs.molecule_debug == 'true'
-        uses: https://github.com/mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113  # v3.24
-        with:
-          limit-access-to-actor: true
-          # tmate, openssh-client and xz-utils come with the runner image
-          install-dependencies: false
-
-      - name: Run Molecule unit tests
-        run: |
-          # word splitting on purpose: args is one string of molecule options
-          # shellcheck disable=SC2086
-          molecule test $MOLECULE_ARGS
-        env:
-          MOLECULE_ARGS: ${{ inputs.args }}
-          ANSIBLE_FORCE_COLOR: '1'
-          ANSIBLE_VERBOSITY: '1'
-          CI_JOB_ID: ${{ github.run_id }}
-          GITEA_TOKEN: ${{ secrets.CI_RUNNER_PAT }}
-          GITHUB_TOKEN: ${{ secrets.CI_RUNNER_PAT_GITHUB }}
-          MOLECULE_DEBUG: ${{ inputs.molecule_debug }}
-          PY_COLORS: '1'
-          AWS_ACCESS_KEY_ID: ${{ secrets.MOLECULE_AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.MOLECULE_AWS_SECRET_ACCESS_KEY }}
-          ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
 
       - name: Cleanup workspace
         if: always()
@@ -438,7 +383,7 @@ jobs:
     container:
       image: ghcr.io/msqu-devops/molecule:runner@sha256:48a43e05780540f368aa82b3a57218d59b73ea042a21eeb967837a49e9c20da6
     needs: [changes, lint, molecule-unit-debian]
-    if: always() && (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && inputs.integration == 'true' && needs.lint.result == 'success' && (needs.molecule-unit-debian.result == 'success' || inputs.unit != 'true')
+    if: always() && github.event_name != 'push' && (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && inputs.integration == 'true' && needs.lint.result == 'success' && (needs.molecule-unit-debian.result == 'success' || inputs.unit != 'true')
     env:
       TEST_TYPE: integration
       AWS_DEFAULT_REGION: ${{ inputs.region }}
@@ -483,6 +428,7 @@ jobs:
           token: '${{ secrets.CI_RUNNER_PAT }}'
           path: git_infra
           ref: main
+          persist-credentials: false
           sparse-checkout: |
             group_vars/
 
@@ -494,13 +440,16 @@ jobs:
           token: '${{ secrets.CI_RUNNER_PAT }}'
           path: git_molecule
           ref: ${{ inputs.molecule_ref }}
+          persist-credentials: false
           sparse-checkout: |
             scenarios/ec2
 
       - name: Prepare Ansible Vault
         env:
           ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
-        run: printf '%s\n' "$ANSIBLE_VAULT_PASSWORD" > "$GITHUB_WORKSPACE/.vault"
+        run: |
+          umask 077
+          printf '%s\n' "$ANSIBLE_VAULT_PASSWORD" > "$GITHUB_WORKSPACE/.vault"
 
       - name: Setup molecule scenario
         run: |
@@ -523,7 +472,6 @@ jobs:
           case "$INSTANCE_SIZE" in *g.*|*gd.*|*gn.*) arch=arm64 ;; *) arch=amd64 ;; esac
           case "$MOLECULE_DISTRO" in
             debian-*) owner=136693071363; name="${MOLECULE_DISTRO}-${arch}-*" ;;
-            ubuntu-*) owner=099720109477; name="ubuntu/images/hvm-ssd-gp3/ubuntu-*-${MOLECULE_DISTRO#ubuntu-}-${arch}-server-*" ;;
             *) echo "Unsupported distro for ec2: $MOLECULE_DISTRO"; exit 1 ;;
           esac
           # Subnets come from Infrastructure/aws-molecule (tag molecule=true); spread jobs across zones
@@ -559,143 +507,6 @@ jobs:
           PY_COLORS: '1'
           AWS_ACCESS_KEY_ID: ${{ secrets.MOLECULE_AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.MOLECULE_AWS_SECRET_ACCESS_KEY }}
-          ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
-
-      - name: Cleanup workspace
-        if: always()
-        shell: bash
-        run: |
-          cd "${GITHUB_WORKSPACE}"
-          shopt -s dotglob
-          rm -rf ./*
-
-  molecule-integration-ubuntu:
-    runs-on: molecule
-    container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:48a43e05780540f368aa82b3a57218d59b73ea042a21eeb967837a49e9c20da6
-    needs: [changes, lint, molecule-unit-ubuntu]
-    if: always() && (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && inputs.integration == 'true' && needs.lint.result == 'success' && (needs.molecule-unit-ubuntu.result == 'success' || inputs.unit != 'true')
-    env:
-      TEST_TYPE: integration
-      AWS_DEFAULT_REGION: ${{ inputs.region }}
-      INSTANCE_REGION: ${{ inputs.region }}
-      MOLECULE_DISTRO: ${{ inputs.ubuntu_distro }}
-      MOLECULE_SCENARIO_NAME: ec2
-      INSTANCE_SIZE: ${{ inputs.instance_size }}
-    steps:
-      - name: Checkout repository
-        uses: https://github.com/actions/checkout@v7
-
-      - name: Set environment variables
-        run: |
-          {
-            echo "CI_HOSTNAME=$(echo '${{ env.MOLECULE_DISTRO }}' | tr -dc '[:alnum:]\n\r' | tr '[:upper:]' '[:lower:]')"
-            echo "CI_PROJECT_NAME_MOLECULE=$(echo "${GITHUB_REPOSITORY#*/}" | tr '_' '-')"
-            echo "CI_PROJECT_DIR=$GITHUB_WORKSPACE"
-          } >> "$GITHUB_ENV"
-
-      - name: Configure SSH
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-        run: |
-          mkdir -p ~/.ssh/
-          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keygen -y -f ~/.ssh/id_ed25519 > ~/.ssh/id_ed25519.pub
-          echo "SSH Key Fingerprint: $(ssh-keygen -l -E md5 -f ~/.ssh/id_ed25519)"
-          ssh-keyscan -p 22222 git.msqu.de >> ~/.ssh/known_hosts 2>/dev/null || true
-          # test hosts get new host keys every run; git.msqu.de stays checked against the keyscan above
-          cat > ~/.ssh/config << EOF
-          Host * !git.msqu.de
-            StrictHostKeyChecking no
-            UserKnownHostsFile=/dev/null
-          EOF
-
-      - name: Checkout infra repository
-        uses: https://github.com/actions/checkout@v7
-        with:
-          github-server-url: https://git.msqu.de
-          repository: infrastructure/infra
-          token: '${{ secrets.CI_RUNNER_PAT }}'
-          path: git_infra
-          ref: main
-          sparse-checkout: |
-            group_vars/
-
-      - name: Checkout molecule scenarios
-        uses: https://github.com/actions/checkout@v7
-        with:
-          github-server-url: https://git.msqu.de
-          repository: cicd/molecule
-          token: '${{ secrets.CI_RUNNER_PAT }}'
-          path: git_molecule
-          ref: ${{ inputs.molecule_ref }}
-          sparse-checkout: |
-            scenarios/ec2
-
-      - name: Prepare Ansible Vault
-        env:
-          ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
-        run: printf '%s\n' "$ANSIBLE_VAULT_PASSWORD" > "$GITHUB_WORKSPACE/.vault"
-
-      - name: Setup molecule scenario
-        run: |
-          mkdir -p "${GITHUB_WORKSPACE}/molecule/default"
-          rsync -avzh --ignore-existing --ignore-errors \
-            git_molecule/scenarios/ec2/ \
-            "${GITHUB_WORKSPACE}/molecule/default/"
-
-      - name: Configure integration test variables
-        run: |
-          rsync -aP git_infra/group_vars "${GITHUB_WORKSPACE}/molecule/default/"
-
-      - name: Resolve EC2 image and subnet
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.MOLECULE_AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.MOLECULE_AWS_SECRET_ACCESS_KEY }}
-        run: |
-          set -euo pipefail
-          # Graviton families (t4g, m7g, ...) need arm64 images
-          case "$INSTANCE_SIZE" in *g.*|*gd.*|*gn.*) arch=arm64 ;; *) arch=amd64 ;; esac
-          case "$MOLECULE_DISTRO" in
-            debian-*) owner=136693071363; name="${MOLECULE_DISTRO}-${arch}-*" ;;
-            ubuntu-*) owner=099720109477; name="ubuntu/images/hvm-ssd-gp3/ubuntu-*-${MOLECULE_DISTRO#ubuntu-}-${arch}-server-*" ;;
-            *) echo "Unsupported distro for ec2: $MOLECULE_DISTRO"; exit 1 ;;
-          esac
-          # Subnets come from Infrastructure/aws-molecule (tag molecule=true); spread jobs across zones
-          subnet=$(python3 -c 'import boto3,random; s=boto3.client("ec2").describe_subnets(Filters=[{"Name":"tag:molecule","Values":["true"]}])["Subnets"]; print(random.choice(s)["SubnetId"])')
-          {
-            echo "EC2_IMAGE_OWNER=$owner"
-            echo "EC2_IMAGE_NAME=$name"
-            echo "EC2_SUBNET_ID=$subnet"
-          } >> "$GITHUB_ENV"
-          echo "image: $owner/$name ($arch), subnet: $subnet"
-
-      - name: Setup debugging session
-        if: inputs.molecule_debug == 'true'
-        uses: https://github.com/mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113  # v3.24
-        with:
-          limit-access-to-actor: true
-          # tmate, openssh-client and xz-utils come with the runner image
-          install-dependencies: false
-
-      - name: Run Molecule integration tests
-        run: |
-          # word splitting on purpose: args is one string of molecule options
-          # shellcheck disable=SC2086
-          molecule test $MOLECULE_ARGS
-        env:
-          MOLECULE_ARGS: ${{ inputs.args }}
-          ANSIBLE_FORCE_COLOR: '1'
-          ANSIBLE_VERBOSITY: '1'
-          CI_JOB_ID: ${{ github.run_id }}
-          GITEA_TOKEN: ${{ secrets.CI_RUNNER_PAT }}
-          GITHUB_TOKEN: ${{ secrets.CI_RUNNER_PAT_GITHUB }}
-          MOLECULE_DEBUG: ${{ inputs.molecule_debug }}
-          PY_COLORS: '1'
-          AWS_ACCESS_KEY_ID: ${{ secrets.MOLECULE_AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.MOLECULE_AWS_SECRET_ACCESS_KEY }}
-          ANSIBLE_VAULT_PASSWORD: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
 
       - name: Cleanup workspace
         if: always()
@@ -707,39 +518,32 @@ jobs:
 
   # Runs after all test jobs, also after failures and cancellations: terminates leftover instances
   # of this repo and, as a safety net, any molecule instance older than 3 hours
+  # (scripts/cloud-sweep.sh). Skips with the tests: nothing relevant changed, or a push. A run that is
+  # force-cancelled never gets here: .gitea/workflows/cloud-sweep.yml runs the sweep on a schedule.
   molecule-cleanup:
     runs-on: molecule
     container:
       image: ghcr.io/msqu-devops/molecule:runner@sha256:48a43e05780540f368aa82b3a57218d59b73ea042a21eeb967837a49e9c20da6
-    if: always() && (inputs.unit == 'true' || inputs.integration == 'true')
-    needs: [molecule-unit-debian, molecule-unit-ubuntu, molecule-integration-debian, molecule-integration-ubuntu]
+    if: always() && github.event_name != 'push' && (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && (inputs.unit == 'true' || inputs.integration == 'true')
+    needs: [changes, molecule-unit-debian, molecule-integration-debian]
     steps:
+      - name: Checkout the sweep script
+        uses: https://github.com/actions/checkout@v7
+        with:
+          github-server-url: https://git.msqu.de
+          repository: cicd/molecule
+          token: '${{ secrets.CI_RUNNER_PAT }}'
+          path: git_molecule
+          ref: ${{ inputs.molecule_ref }}
+          persist-credentials: false
+          sparse-checkout: |
+            scripts
+
       - name: Terminate leftover molecule instances
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.MOLECULE_AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.MOLECULE_AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: ${{ inputs.region }}
         run: |
-          python3 - <<'PY'
-          import datetime, os
-          import boto3
-          project = os.environ["GITHUB_REPOSITORY"].split("/", 1)[1].replace("_", "-")
-          cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=3)
-          ec2 = boto3.client("ec2")
-          # Fails loudly if the API cannot be queried instead of reporting "nothing found"
-          reservations = ec2.describe_instances(Filters=[
-              {"Name": "tag:managed-by", "Values": ["molecule"]},
-              {"Name": "instance-state-name", "Values": ["pending", "running", "stopping", "stopped"]},
-          ])["Reservations"]
-          doomed = []
-          for instance in (i for r in reservations for i in r["Instances"]):
-              tags = {t["Key"]: t["Value"] for t in instance.get("Tags", [])}
-              reason = "this repo" if tags.get("project") == project else "older than 3h" if instance["LaunchTime"] < cutoff else None
-              if reason:
-                  print(f"Terminating {instance['InstanceId']} ({tags.get('Name')}, {reason})")
-                  doomed.append(instance["InstanceId"])
-          if doomed:
-              ec2.terminate_instances(InstanceIds=doomed)
-          else:
-              print("No leftover molecule instances")
-          PY
+          project=${GITHUB_REPOSITORY#*/}
+          SWEEP_PROJECT=${project//_/-} bash git_molecule/scripts/cloud-sweep.sh ec2
