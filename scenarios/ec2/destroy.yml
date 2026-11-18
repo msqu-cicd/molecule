@@ -82,15 +82,24 @@
         index_var: index
         label: "{{ platform.name }}"
 
+    - name: Check for the run config
+      ansible.builtin.stat:
+        path: "{{ run_config_path }}"
+      register: run_config_stat
+
+    # The instance config is written after all instances exist; the run config at the
+    # start of create. A create that failed half way has only the run config, and its
+    # instances, security groups and keys carry the run id.
     - name: Destroy resources
-      when: instance_config | length != 0
+      when: run_config_stat.stat.exists or instance_config | length != 0
       block:
         - name: Destroy ephemeral EC2 instances
           amazon.aws.ec2_instance:
             profile: "{{ item.aws_profile | default(omit) }}"
             region: "{{ item.region | default(omit) }}"
-            instance_ids: "{{ instance_config | map(attribute='instance_ids') | flatten }}"
-            vpc_subnet_id: "{{ item.vpc_subnet_id }}"
+            filters:
+              "tag:molecule-run-id": "{{ run_config.run_id }}"
+              "tag:instance": "{{ item.name }}"
             state: absent
           loop: "{{ platforms }}"
           loop_control:
