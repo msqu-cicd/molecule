@@ -34,7 +34,7 @@ jobs:
   hetzner:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:f6d580a300c08dc5a7424083a7f6c5f7efc01040cac55fffdfaa6c919c845d67
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:bb4dd74d85fbae99d32dbc7ba493aa4c297ee3448f1f27bc25e7956f7b9a5ba0
     timeout-minutes: 20
     env:
       # the CI-only zone of the DynDNS records (molecule_ddns.domain in Infrastructure/infra, group_vars/all/homelab/cicd/molecule.yml)
@@ -56,7 +56,7 @@ jobs:
   vultr:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:f6d580a300c08dc5a7424083a7f6c5f7efc01040cac55fffdfaa6c919c845d67
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:bb4dd74d85fbae99d32dbc7ba493aa4c297ee3448f1f27bc25e7956f7b9a5ba0
     timeout-minutes: 20
     steps:
       - name: Checkout repository
@@ -74,7 +74,7 @@ jobs:
   ec2:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:f6d580a300c08dc5a7424083a7f6c5f7efc01040cac55fffdfaa6c919c845d67
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:bb4dd74d85fbae99d32dbc7ba493aa4c297ee3448f1f27bc25e7956f7b9a5ba0
     timeout-minutes: 20
     steps:
       - name: Checkout repository
