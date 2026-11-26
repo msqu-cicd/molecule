@@ -23,7 +23,7 @@ jobs:
   lint:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:bb4dd74d85fbae99d32dbc7ba493aa4c297ee3448f1f27bc25e7956f7b9a5ba0
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:da36b08c062db66c6b796229a5187c93ecbaf2ca6b7ba402b7191f1727807e5c
     steps:
       - name: Checkout repository
         uses: https://github.com/actions/checkout@v7
