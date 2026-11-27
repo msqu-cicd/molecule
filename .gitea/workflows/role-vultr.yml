@@ -108,7 +108,7 @@ jobs:
   lint:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:da36b08c062db66c6b796229a5187c93ecbaf2ca6b7ba402b7191f1727807e5c
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:d3d948e291fe12adb15204223159f3c805f8ac4cc768b40f7300d46386045875
     needs: changes
     if: needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true'
     steps:
@@ -144,7 +144,7 @@ jobs:
   secret-scan:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:da36b08c062db66c6b796229a5187c93ecbaf2ca6b7ba402b7191f1727807e5c
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:d3d948e291fe12adb15204223159f3c805f8ac4cc768b40f7300d46386045875
     steps:
       # A pull request is scanned commit by commit, so a secret added and removed again inside it is
       # found (full history, so the base commit resolves); a push or dispatch scans the checked-out tree.
@@ -178,7 +178,7 @@ jobs:
   infra-spec:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:da36b08c062db66c6b796229a5187c93ecbaf2ca6b7ba402b7191f1727807e5c
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:d3d948e291fe12adb15204223159f3c805f8ac4cc768b40f7300d46386045875
     needs: [changes, lint]
     if: needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true'
     steps:
@@ -237,7 +237,7 @@ jobs:
   molecule-integration:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:da36b08c062db66c6b796229a5187c93ecbaf2ca6b7ba402b7191f1727807e5c
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:d3d948e291fe12adb15204223159f3c805f8ac4cc768b40f7300d46386045875
     needs: [changes, lint]
     if: (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true') && github.event_name != 'push'
     env:
@@ -357,7 +357,7 @@ jobs:
   molecule-cleanup:
     runs-on: molecule
     container:
-      image: ghcr.io/msqu-devops/molecule:runner@sha256:da36b08c062db66c6b796229a5187c93ecbaf2ca6b7ba402b7191f1727807e5c
+      image: ghcr.io/msqu-devops/molecule:runner@sha256:d3d948e291fe12adb15204223159f3c805f8ac4cc768b40f7300d46386045875
     if: always() && github.event_name != 'push' && (needs.changes.outputs.any_modified == 'true' || inputs.force_run == 'true')
     needs: [changes, molecule-integration]
     env:
